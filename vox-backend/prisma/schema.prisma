@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  name         String   @default("")
+  currencyCode String   @default("INR")
+  phone        String?
+  timeZone     String   @default("Asia/Kolkata")
+  locale       String   @default("en-IN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     Session[]
+  transactions Transaction[]
+  memberships  Membership[]
+  budgets      Budget[]
+  recurring    RecurringPayment[]
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Transaction {
+  id            String    @id @db.Uuid
+  ownerId       String    @db.Uuid
+  type          String
+  amountMinor   BigInt
+  currencyCode  String
+  title         String
+  category      String?
+  paymentMethod String    @default("CASH")
+  timestamp     DateTime
+  source        String    @default("MANUAL")
+  groupId       String?   @db.Uuid
+  notes         String?
+  version       Int       @default(1)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  owner         User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@index([ownerId, timestamp, id])
+  @@index([ownerId, updatedAt, id])
+}
+
+model Budget {
+  id           String @id @default(uuid()) @db.Uuid
+  ownerId      String @db.Uuid
+  month        String
+  amountMinor  BigInt
+  currencyCode String
+  owner        User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@unique([ownerId, month, currencyCode])
+}
+
+model Group {
+  id           String        @id @default(uuid()) @db.Uuid
+  name         String
+  type         String
+  currencyCode String
+  createdAt    DateTime      @default(now())
+  members      Membership[]
+  expenses     GroupExpense[]
+  settlements  Settlement[]
+}
+
+model Membership {
+  groupId String @db.Uuid
+  userId  String @db.Uuid
+  role    String @default("MEMBER")
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model GroupExpense {
+  id          String         @id @db.Uuid
+  groupId     String         @db.Uuid
+  description String
+  amountMinor BigInt
+  paidById    String         @db.Uuid
+  timestamp   DateTime
+  createdAt   DateTime       @default(now())
+  group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  shares      ExpenseShare[]
+}
+
+model ExpenseShare {
+  expenseId   String       @db.Uuid
+  userId      String       @db.Uuid
+  amountMinor BigInt
+  expense     GroupExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  @@id([expenseId, userId])
+}
+
+model Settlement {
+  id          String   @id @default(uuid()) @db.Uuid
+  groupId     String   @db.Uuid
+  fromId      String   @db.Uuid
+  toId        String   @db.Uuid
+  amountMinor BigInt
+  createdAt   DateTime @default(now())
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model RecurringPayment {
+  id                String                @id @db.Uuid
+  ownerId           String                @db.Uuid
+  name              String
+  category          String
+  amountMinor       BigInt?
+  currencyCode      String
+  frequency         String
+  customIntervalDays Int?
+  nextDueDate       DateTime              @db.Date
+  remindDaysBefore  Boolean               @default(true)
+  remindOnDueDate   Boolean               @default(true)
+  active            Boolean               @default(true)
+  owner             User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  occurrences       RecurringOccurrence[]
+}
+
+model RecurringOccurrence {
+  id          String           @id @default(uuid()) @db.Uuid
+  paymentId   String           @db.Uuid
+  dueDate     DateTime         @db.Date
+  amountMinor BigInt?
+  status      String           @default("DUE")
+  payment     RecurringPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  @@unique([paymentId, dueDate])
+}
