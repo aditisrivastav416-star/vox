@@ -9,11 +9,11 @@ datasource db {
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
+  email        String?  @unique
   passwordHash String
   name         String   @default("")
   currencyCode String   @default("INR")
-  phone        String?
+  phone        String?  @unique
   timeZone     String   @default("Asia/Kolkata")
   locale       String   @default("en-IN")
   createdAt    DateTime @default(now())
@@ -23,6 +23,15 @@ model User {
   memberships  Membership[]
   budgets      Budget[]
   recurring    RecurringPayment[]
+  receipts     Receipt[]
+}
+
+model SignupCode {
+  identifier String   @id
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
 }
 
 model Session {
@@ -51,6 +60,7 @@ model Transaction {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   owner         User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  group         Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   @@index([ownerId, timestamp, id])
   @@index([ownerId, updatedAt, id])
 }
@@ -74,6 +84,7 @@ model Group {
   members      Membership[]
   expenses     GroupExpense[]
   settlements  Settlement[]
+  transactions Transaction[]
 }
 
 model Membership {
@@ -82,6 +93,10 @@ model Membership {
   role    String @default("MEMBER")
   group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paidExpenses GroupExpense[] @relation("ExpensePayer")
+  shares ExpenseShare[]
+  settlementsFrom Settlement[] @relation("SettlementFrom")
+  settlementsTo Settlement[] @relation("SettlementTo")
   @@id([groupId, userId])
   @@index([userId])
 }
@@ -95,14 +110,18 @@ model GroupExpense {
   timestamp   DateTime
   createdAt   DateTime       @default(now())
   group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer       Membership     @relation("ExpensePayer", fields: [groupId, paidById], references: [groupId, userId])
   shares      ExpenseShare[]
+  @@unique([id, groupId])
 }
 
 model ExpenseShare {
   expenseId   String       @db.Uuid
+  groupId     String       @db.Uuid
   userId      String       @db.Uuid
   amountMinor BigInt
-  expense     GroupExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  expense     GroupExpense @relation(fields: [expenseId, groupId], references: [id, groupId], onDelete: Cascade)
+  member      Membership   @relation(fields: [groupId, userId], references: [groupId, userId])
   @@id([expenseId, userId])
 }
 
@@ -114,6 +133,29 @@ model Settlement {
   amountMinor BigInt
   createdAt   DateTime @default(now())
   group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  from        Membership @relation("SettlementFrom", fields: [groupId, fromId], references: [groupId, userId])
+  to          Membership @relation("SettlementTo", fields: [groupId, toId], references: [groupId, userId])
+}
+
+model Receipt {
+  id           String        @id @default(uuid()) @db.Uuid
+  ownerId      String        @db.Uuid
+  merchant     String
+  timestamp    DateTime
+  currencyCode String
+  taxMinor     BigInt        @default(0)
+  createdAt    DateTime      @default(now())
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  items        ReceiptItem[]
+  @@index([ownerId, timestamp])
+}
+
+model ReceiptItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  receiptId   String  @db.Uuid
+  name        String
+  amountMinor BigInt
+  receipt     Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 model RecurringPayment {

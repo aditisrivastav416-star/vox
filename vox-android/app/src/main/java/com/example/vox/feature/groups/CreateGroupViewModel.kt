@@ -23,6 +23,7 @@ data class CreateGroupUiState(
     val selectedIds: Set<String> = emptySet(),
     val showNameError: Boolean = false,
     val showMembersError: Boolean = false,
+    val error: String? = null,
 )
 
 private data class CreateGroupForm(
@@ -32,6 +33,7 @@ private data class CreateGroupForm(
     val selectedIds: Set<String> = emptySet(),
     val showNameError: Boolean = false,
     val showMembersError: Boolean = false,
+    val error: String? = null,
 )
 
 sealed interface CreateGroupAction {
@@ -47,6 +49,10 @@ sealed interface CreateGroupEvent {
 }
 
 class CreateGroupViewModel(private val groupRepository: GroupRepository) : ViewModel() {
+    fun syncContacts() = viewModelScope.launch {
+        runCatching { groupRepository.syncContacts() }
+            .onFailure { e -> form.update { it.copy(error = e.message ?: "Could not sync contacts") } }
+    }
     private val form = MutableStateFlow(CreateGroupForm())
 
     val state: StateFlow<CreateGroupUiState> = combine(form, groupRepository.observeContacts()) { f, contacts ->
@@ -63,6 +69,7 @@ class CreateGroupViewModel(private val groupRepository: GroupRepository) : ViewM
             selectedIds = f.selectedIds,
             showNameError = f.showNameError,
             showMembersError = f.showMembersError,
+            error = f.error,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CreateGroupUiState())
 
@@ -85,8 +92,10 @@ class CreateGroupViewModel(private val groupRepository: GroupRepository) : ViewM
                     return
                 }
                 viewModelScope.launch {
-                    val id = groupRepository.createGroup(f.name.trim(), f.type, f.selectedIds.toList())
-                    _events.send(CreateGroupEvent.Created(id))
+                    try {
+                        val id = groupRepository.createGroup(f.name.trim(), f.type, f.selectedIds.toList())
+                        _events.send(CreateGroupEvent.Created(id))
+                    } catch (e: Exception) { form.update { it.copy(error = e.message ?: "Could not create group") } }
                 }
             }
         }

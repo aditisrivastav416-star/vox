@@ -135,6 +135,7 @@ fun CreateRecurringScreen(state: CreateRecurringUiState, onAction: (CreateRecurr
                 onAction(CreateRecurringAction.RemindOnDueDateChanged(it))
             })
 
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = { onAction(CreateRecurringAction.Save) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),

@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -130,6 +131,7 @@ fun TransactionFormScreen(
                 label = { Text(stringResource(R.string.field_notes)) },
                 modifier = Modifier.fillMaxWidth(),
             )
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = { onAction(TransactionFormAction.Save) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),

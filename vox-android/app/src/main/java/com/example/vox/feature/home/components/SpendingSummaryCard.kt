@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,8 @@ fun SpendingSummaryCard(
     onSelectMode: (SummaryMode) -> Unit,
     onToggleBreakdown: () -> Unit,
     modifier: Modifier = Modifier,
+    budgetMinor: Long? = null,
+    onSetBudget: () -> Unit = {},
 ) {
     val money = LocalMoneyFormatter.current
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -53,6 +56,15 @@ fun SpendingSummaryCard(
         ) {
             Text("TOTAL SPENT THIS MONTH", color = Color(0xFFD9D8F4), fontSize = 10.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold)
             Text(money.format(summary.spending), color = Color.White, fontSize = 35.sp, letterSpacing = (-1.5).sp, fontWeight = FontWeight.Bold)
+            if (budgetMinor != null && budgetMinor > 0) {
+                val used = summary.spending.amountMinor.toFloat() / budgetMinor
+                LinearProgressIndicator(progress = { used.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = Color.White,
+                    trackColor = Color.White.copy(alpha = .2f))
+                Text("${(used * 100).toInt()}% of monthly budget used", color = Color.White, fontSize = 12.sp)
+            }
+            TextButton(onClick = onSetBudget) {
+                Text(if (budgetMinor == null) "Set monthly budget" else "Edit monthly budget", color = Color.White)
+            }
             Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .16f)))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Monthly spending", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)

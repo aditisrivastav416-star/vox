@@ -1,7 +1,11 @@
 package com.example.vox.domain
 
 import com.example.vox.core.common.MoneyFormatter
-import com.example.vox.data.fake.FakeSeedData
+import com.example.vox.domain.model.Group
+import com.example.vox.domain.model.GroupExpense
+import com.example.vox.domain.model.GroupType
+import com.example.vox.domain.model.Person
+import com.example.vox.domain.model.Settlement
 import com.example.vox.domain.model.Category
 import com.example.vox.domain.model.Money
 import com.example.vox.domain.model.PaymentMethod
@@ -15,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.YearMonth
+import java.time.Instant
 import java.time.ZoneOffset
 import java.util.Locale
 
@@ -45,14 +50,18 @@ class MoneyAndSplitTest {
     }
 
     @Test
-    fun groupBalances_fromSeedData() {
-        val goa = FakeSeedData.groups().first { it.id == "goa" }
+    fun groupBalances_fromExpensesAndSettlements() {
+        val goa = Group("goa", "Trip", GroupType.TRIP, "INR",
+            listOf(Person("me", "Me"), Person("rahul", "Rahul"), Person("riya", "Riya"), Person("kabir", "Kabir")),
+            listOf(GroupExpense("e", "Hotel", Money(245_000, "INR"), "me",
+                mapOf("rahul" to 120_000L, "riya" to 75_000L, "kabir" to 50_000L), Instant.EPOCH)))
         assertEquals(120_000L, goa.balanceWith("rahul").amountMinor)
         assertEquals(75_000L, goa.balanceWith("riya").amountMinor)
         assertEquals(50_000L, goa.balanceWith("kabir").amountMinor)
-        val flat = FakeSeedData.groups().first { it.id == "flat402" }
+        val flat = Group("flat", "Home", GroupType.HOME, "INR", listOf(Person("me", "Me"), Person("a", "A")),
+            listOf(GroupExpense("rent", "Rent", Money(148_000, "INR"), "a", mapOf("me" to 74_000L, "a" to 74_000L), Instant.EPOCH)))
         assertEquals(-74_000L, flat.netBalance.amountMinor)
-        val college = FakeSeedData.groups().first { it.id == "college" }
+        val college = flat.copy(settlements = listOf(Settlement("me", "a", 74_000L)))
         assertEquals(0L, college.netBalance.amountMinor)
     }
 

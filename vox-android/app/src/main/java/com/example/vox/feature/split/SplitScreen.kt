@@ -84,6 +84,7 @@ fun SplitScreen(state: SplitUiState, onAction: (SplitAction) -> Unit) {
                 SplitStep.ITEMS -> ItemSplit(state, onAction)
                 SplitStep.ITEMS_RESULT -> SplitResult(state, onAction)
             }
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }

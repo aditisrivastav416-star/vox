@@ -1,6 +1,10 @@
 package com.example.vox.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import com.example.vox.app.VoxApplication
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -59,6 +63,7 @@ private fun optionalArgs(vararg names: String) = names.map {
 
 @Composable
 fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
+    val app = LocalContext.current.applicationContext as VoxApplication
     val back: () -> Unit = { navController.popBackStack() }
     val goHome: () -> Unit = { navController.popBackStack(D.HOME, inclusive = false) }
 
@@ -72,15 +77,21 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(D.SPLASH) {
             LaunchedEffect(Unit) {
                 delay(1_200)
-                navController.navigate(D.WELCOME) { popUpTo(D.SPLASH) { inclusive = true } }
+                navController.navigate(if (app.container.restoreSession()) D.HOME else D.WELCOME) { popUpTo(D.SPLASH) { inclusive = true } }
             }
             SplashScreen()
         }
         composable(D.WELCOME) {
             val vm = voxViewModel { AuthViewModel(userRepository) }
+            val authState by vm.state.collectAsStateWithLifecycle()
             val enterApp = { navController.navigate(D.HOME) { popUpTo(D.WELCOME) { inclusive = true } } }
-            ObserveEvents(vm.events) { if (it == AuthEvent.SignedIn) enterApp() }
-            WelcomeScreen(onContinueWithEmail = { vm.onAction(AuthAction.SkipSignIn) })
+            ObserveEvents(vm.events) {
+                when (it) {
+                    AuthEvent.SignedIn -> enterApp()
+                    AuthEvent.Registered -> navController.navigate(D.PROFILE_SETUP)
+                }
+            }
+            WelcomeScreen(authState, vm::onAction)
         }
         composable(D.PROFILE_SETUP) {
             ProfileSetupRoute(
@@ -92,7 +103,7 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(D.HOME) {
             HomeRoute(
                 viewModel = voxViewModel {
-                    HomeViewModel(transactionRepository, groupRepository, recurringPaymentRepository, userRepository)
+                    HomeViewModel(transactionRepository, groupRepository, recurringPaymentRepository, userRepository, budgetRepository)
                 },
                 onOpenRecurring = { navController.navigate(D.RECURRING) },
                 onOpenGroups = { navController.navigate(D.GROUPS) },

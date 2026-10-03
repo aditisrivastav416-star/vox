@@ -9,12 +9,14 @@ import com.example.vox.domain.model.Money
 import com.example.vox.domain.model.Transaction
 import com.example.vox.domain.model.TransactionType
 import com.example.vox.domain.repository.GroupRepository
+import com.example.vox.domain.repository.BudgetRepository
 import com.example.vox.domain.repository.RecurringPaymentRepository
 import com.example.vox.domain.repository.TransactionRepository
 import com.example.vox.domain.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import java.time.LocalTime
 import java.time.YearMonth
@@ -36,17 +38,20 @@ class HomeViewModel(
     groupRepository: GroupRepository,
     recurringPaymentRepository: RecurringPaymentRepository,
     userRepository: UserRepository,
+    private val budgetRepository: BudgetRepository,
 ) : ViewModel() {
 
     private val controls = MutableStateFlow(HomeControls())
+    val budgetError = MutableStateFlow<String?>(null)
 
     val state: StateFlow<HomeUiState> = combine(
         transactionRepository.observeTransactions(),
         groupRepository.observeGroups(),
         recurringPaymentRepository.observePayments(),
-        userRepository.observeProfile(),
+        combine(userRepository.observeProfile(), budgetRepository.observeBudgets()) { profile, budgets -> profile to budgets },
         controls,
-    ) { transactions, groups, payments, profile, c ->
+    ) { transactions, groups, payments, account, c ->
+        val (profile, budgets) = account
         val currency = profile?.currencyCode ?: DEFAULT_CURRENCY
         val summary = buildSummary(transactions, c.month, c.mode, currency, ZoneId.systemDefault())
         HomeUiModel(
@@ -55,11 +60,21 @@ class HomeViewModel(
             month = c.month,
             canGoToNextMonth = c.month < YearMonth.now(),
             summary = if (c.showAllCategories) summary else summary.copy(categories = summary.categories.take(COLLAPSED_CATEGORIES)),
+            budgetMinor = budgets[c.month.toString() to currency],
             showAllCategories = c.showAllCategories,
             upcomingPayments = payments.take(MAX_UPCOMING),
             groups = groups.map { GroupUi(it.id, it.name, it.type, it.netBalance) },
         )
     }.stateInUi(viewModelScope)
+
+    fun setBudget(amountMinor: Long, onSaved: () -> Unit) = viewModelScope.launch {
+        val model = (state.value as? com.example.vox.core.ui.UiState.Success)?.data ?: return@launch
+        try {
+            budgetRepository.setBudget(model.month.toString(), model.summary.spending.currencyCode, amountMinor)
+            budgetError.value = null
+            onSaved()
+        } catch (e: Exception) { budgetError.value = e.message ?: "Could not save budget" }
+    }
 
     fun onAction(action: HomeAction) {
         when (action) {

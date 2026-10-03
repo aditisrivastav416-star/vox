@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,7 @@ fun GroupsRoute(viewModel: GroupsViewModel, onBack: () -> Unit, onCreate: () -> 
 @Composable
 fun GroupsScreen(state: UiState<GroupsUiModel>, onBack: () -> Unit, onCreate: () -> Unit, onOpenGroup: (String) -> Unit) {
     Scaffold(
+        floatingActionButton = { ExtendedFloatingActionButton(onClick = onCreate, icon = { Icon(VoxIcons.Add, contentDescription = null) }, text = { Text(stringResource(R.string.create_group)) }) },
         topBar = {
             VoxTopBar(stringResource(R.string.groups), onBack = onBack) {
                 IconButton(onClick = onCreate) { Icon(VoxIcons.Add, contentDescription = stringResource(R.string.create_group)) }

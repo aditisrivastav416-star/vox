@@ -53,6 +53,7 @@ data class SplitUiState(
     val showAmountError: Boolean = false,
     val showDescriptionError: Boolean = false,
     val showAssignmentError: Boolean = false,
+    val error: String? = null,
 ) {
     val canSplitByItems: Boolean get() = items.isNotEmpty()
 }
@@ -84,6 +85,7 @@ class SplitViewModel(
 ) : ViewModel() {
     private val groupId: String? = savedStateHandle[VoxDestination.ARG_GROUP_ID]
     private val receiptId: String? = savedStateHandle[VoxDestination.ARG_RECEIPT_ID]
+    private val submissionId: String = savedStateHandle["submission_id"] ?: UUID.randomUUID().toString().also { savedStateHandle["submission_id"] = it }
 
     private val _state = MutableStateFlow(SplitUiState())
     val state: StateFlow<SplitUiState> = _state.asStateFlow()
@@ -176,10 +178,11 @@ class SplitViewModel(
         val total = s.total ?: return
         if (s.shares.isEmpty()) return
         viewModelScope.launch {
+            try {
             if (groupId != null) {
                 groupRepository.addExpense(
                     groupId,
-                    GroupExpense(UUID.randomUUID().toString(), s.description.trim(), total, CURRENT_USER_ID, s.shares, Instant.now()),
+                    GroupExpense(submissionId, s.description.trim(), total, CURRENT_USER_ID, s.shares, Instant.now()),
                 )
             }
             // ponytail: outside a group only your own share is recorded; per-person debts need a group to live in.
@@ -187,7 +190,7 @@ class SplitViewModel(
             if (myShare != null && myShare > 0) {
                 transactionRepository.upsert(
                     Transaction(
-                        id = UUID.randomUUID().toString(),
+                        id = submissionId,
                         type = TransactionType.EXPENSE,
                         amount = Money(myShare, s.currencyCode),
                         title = s.description.trim(),
@@ -200,6 +203,7 @@ class SplitViewModel(
                 )
             }
             _events.send(SplitEvent.Done)
+            } catch (e: Exception) { _state.update { it.copy(error = e.message ?: "Could not save split") } }
         }
     }
 }

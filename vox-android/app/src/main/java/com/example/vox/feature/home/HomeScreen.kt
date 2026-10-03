@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,11 +22,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -50,6 +58,8 @@ import com.example.vox.core.designsystem.theme.LocalMoneyFormatter
 import com.example.vox.feature.home.components.GroupSummaryCard
 import com.example.vox.feature.home.components.SpendingSummaryCard
 import java.time.YearMonth
+import java.math.BigDecimal
+import java.util.Currency
 
 @Composable
 fun HomeRoute(
@@ -61,7 +71,29 @@ fun HomeRoute(
     onOpenTransaction: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    HomeScreen(state) { action ->
+    var editingBudget by remember { mutableStateOf(false) }
+    var budgetText by remember { mutableStateOf("") }
+    var invalidBudget by remember { mutableStateOf(false) }
+    val budgetError by viewModel.budgetError.collectAsStateWithLifecycle()
+    if (editingBudget) AlertDialog(
+        onDismissRequest = { editingBudget = false },
+        title = { Text("Monthly budget") },
+        text = { Column {
+            OutlinedTextField(budgetText, { budgetText = it; invalidBudget = false }, label = { Text("Amount") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+            if (invalidBudget) Text("Enter a valid amount", color = MaterialTheme.colorScheme.error)
+            budgetError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        } },
+        confirmButton = { TextButton(onClick = {
+            val currency = (state as? UiState.Success)?.data?.summary?.spending?.currencyCode ?: "INR"
+            val minor = runCatching { BigDecimal(budgetText).movePointRight(Currency.getInstance(currency).defaultFractionDigits).longValueExact() }.getOrNull()
+            if (minor != null && minor >= 0) {
+                viewModel.setBudget(minor) { editingBudget = false }
+            } else invalidBudget = true
+        }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = { editingBudget = false }) { Text("Cancel") } },
+    )
+    HomeScreen(state, onSetBudget = { editingBudget = true }) { action ->
         when (action) {
             HomeAction.OpenRecurring -> onOpenRecurring()
             HomeAction.OpenGroups -> onOpenGroups()
@@ -74,7 +106,7 @@ fun HomeRoute(
 }
 
 @Composable
-fun HomeScreen(state: HomeUiState, onAction: (HomeAction) -> Unit) {
+fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (HomeAction) -> Unit) {
     UiStateContent(state) { model ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -84,6 +116,8 @@ fun HomeScreen(state: HomeUiState, onAction: (HomeAction) -> Unit) {
             item(key = "summary") {
                 SpendingSummaryCard(
                     summary = model.summary,
+                    budgetMinor = model.budgetMinor,
+                    onSetBudget = onSetBudget,
                     showAllCategories = model.showAllCategories,
                     onSelectMode = { onAction(HomeAction.SelectMode(it)) },
                     onToggleBreakdown = { onAction(HomeAction.ToggleBreakdown) },

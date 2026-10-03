@@ -22,6 +22,12 @@ export class GroupsController {
   private async member(userId: string, id: string) {
     if (!await this.db.membership.findUnique({ where: { groupId_userId: { groupId: id, userId } } })) throw new NotFoundException();
   }
+  @Post('contacts/lookup') async contacts(@Body() body: { identifiers: string[] }) {
+    if (!Array.isArray(body.identifiers) || body.identifiers.length > 100 || body.identifiers.some(x => typeof x !== 'string' || x.length > 254)) throw new BadRequestException('Invalid contacts');
+    const values = body.identifiers.map(x => x.trim().toLowerCase());
+    const users = await this.db.user.findMany({ where: { OR: [{ email: { in: values } }, { phone: { in: values } }] }, select: { id: true, name: true, email: true, phone: true } });
+    return users.map(user => ({ id: user.id, name: user.name, identifier: user.phone && values.includes(user.phone) ? user.phone : user.email }));
+  }
   @Get() async list(@Req() req: any) { return this.db.group.findMany({ where: { members: { some: { userId: req.user.id } } }, include: { members: { include: { user: { select: { id: true, name: true, email: true } } } } } }); }
   @Post() async create(@Req() req: any, @Body() body: GroupInput) {
     const ids = [...new Set([req.user.id, ...body.memberIds])];
@@ -38,7 +44,7 @@ export class GroupsController {
     const members = await this.db.membership.findMany({ where: { groupId: id }, select: { userId: true } });
     const ids = new Set(members.map(m => m.userId));
     if (!ids.has(body.paidById) || !body.shares || Object.keys(body.shares).some(k => !ids.has(k))) throw new BadRequestException('Invalid participant');
-    const shares = Object.entries(body.shares).map(([userId, value]) => ({ userId, amountMinor: minor(value) }));
+    const shares = Object.entries(body.shares).map(([userId, value]) => ({ groupId: id, userId, amountMinor: minor(value) }));
     if (!shares.length || shares.reduce((n,s) => n + s.amountMinor, 0n) !== minor(body.amountMinor)) throw new BadRequestException('Shares must sum to total');
     const existing = await this.db.groupExpense.findUnique({ where: { id: body.id } });
     if (existing) { if (existing.groupId !== id) throw new BadRequestException('ID already used'); return { id: existing.id }; }

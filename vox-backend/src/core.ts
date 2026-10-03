@@ -30,7 +30,7 @@ export function date(value: string): Date {
   if (Number.isNaN(d.getTime())) throw new BadRequestException('Invalid date');
   return d;
 }
-export function publicUser(user: { id: string; email: string; name: string; currencyCode: string; phone: string | null; timeZone: string; locale: string }) {
+export function publicUser(user: { id: string; email: string | null; name: string; currencyCode: string; phone: string | null; timeZone: string; locale: string }) {
   return { id: user.id, email: user.email, name: user.name, currencyCode: user.currencyCode, phone: user.phone, timeZone: user.timeZone, locale: user.locale };
 }
 

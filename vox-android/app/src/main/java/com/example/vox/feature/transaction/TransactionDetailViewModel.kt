@@ -57,8 +57,8 @@ class TransactionDetailViewModel(
             is TransactionDetailAction.ShowDeleteConfirmation -> showDelete.value = action.show
             TransactionDetailAction.ConfirmDelete -> viewModelScope.launch {
                 showDelete.value = false
-                _events.send(TransactionDetailEvent.Deleted)
-                transactionRepository.delete(id)
+                runCatching { transactionRepository.delete(id) }
+                    .onSuccess { _events.send(TransactionDetailEvent.Deleted) }
             }
             TransactionDetailAction.Edit -> Unit // navigation
         }

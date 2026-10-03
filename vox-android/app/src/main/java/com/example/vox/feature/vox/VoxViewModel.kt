@@ -22,6 +22,7 @@ sealed interface VoxUiState {
     data object Idle : VoxUiState
     data object Listening : VoxUiState
     data class Recognized(val result: VoiceResult) : VoxUiState
+    data class Error(val message: String) : VoxUiState
 }
 
 sealed interface VoxAction {
@@ -58,7 +59,10 @@ class VoxViewModel(
             VoxAction.StartListening -> {
                 listenJob?.cancel()
                 _state.value = VoxUiState.Listening
-                listenJob = viewModelScope.launch { _state.value = VoxUiState.Recognized(voiceAssistant.listen()) }
+                listenJob = viewModelScope.launch {
+                    try { _state.value = VoxUiState.Recognized(voiceAssistant.listen()) }
+                    catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Voice recognition unavailable") }
+                }
             }
             VoxAction.CancelListening -> {
                 listenJob?.cancel()
@@ -73,6 +77,7 @@ class VoxViewModel(
     private fun confirm() {
         val result = (_state.value as? VoxUiState.Recognized)?.result ?: return
         viewModelScope.launch {
+            try {
             transactionRepository.upsert(
                 Transaction(
                     id = UUID.randomUUID().toString(),
@@ -86,6 +91,7 @@ class VoxViewModel(
                 ),
             )
             _events.send(VoxEvent.Saved)
+            } catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Could not save transaction") }
         }
     }
 }

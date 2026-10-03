@@ -24,6 +24,7 @@ interface GroupRepository {
     fun observeGroups(): Flow<List<Group>>
     fun observeGroup(id: String): Flow<Group?>
     fun observeContacts(): Flow<List<Person>>
+    suspend fun syncContacts()
     /** Returns the new group's id. */
     suspend fun createGroup(name: String, type: GroupType, memberIds: List<String>): String
     suspend fun addExpense(groupId: String, expense: GroupExpense)
@@ -46,6 +47,15 @@ interface UserRepository {
     fun observeProfile(): Flow<UserProfile?>
     suspend fun saveProfile(profile: UserProfile)
     suspend fun signOut()
+    suspend fun login(identifier: String, password: String)
+    suspend fun startSignup(identifier: String)
+    suspend fun verifySignup(identifier: String, code: String)
+    suspend fun finishSignup(identifier: String, code: String, password: String, confirmPassword: String)
+}
+
+interface BudgetRepository {
+    fun observeBudgets(): Flow<Map<Pair<String, String>, Long>>
+    suspend fun setBudget(month: String, currencyCode: String, amountMinor: Long)
 }
 
 interface VoiceAssistant {
