@@ -53,4 +53,6 @@ data class HomeUiModel(
     val showAllCategories: Boolean,
     val upcomingPayments: List<RecurringPayment>,
     val groups: List<GroupUi>,
+    val owedToYouMinor: Long = 0,
+    val youOweMinor: Long = 0,
 )

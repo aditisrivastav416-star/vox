@@ -9,6 +9,7 @@ import com.example.vox.domain.model.Money
 import com.example.vox.domain.model.Transaction
 import com.example.vox.domain.model.TransactionType
 import com.example.vox.domain.repository.GroupRepository
+import com.example.vox.feature.groups.memberBalances
 import com.example.vox.domain.repository.BudgetRepository
 import com.example.vox.domain.repository.RecurringPaymentRepository
 import com.example.vox.domain.repository.TransactionRepository
@@ -54,6 +55,7 @@ class HomeViewModel(
         val (profile, budgets) = account
         val currency = profile?.currencyCode ?: DEFAULT_CURRENCY
         val summary = buildSummary(transactions, c.month, c.mode, currency, ZoneId.systemDefault())
+        val balances = groups.filter { it.currencyCode == currency }.flatMap { it.memberBalances() }.map { it.balance.amountMinor }
         HomeUiModel(
             greetingRes = greetingFor(LocalTime.now()),
             userName = profile?.name.orEmpty(),
@@ -64,6 +66,8 @@ class HomeViewModel(
             showAllCategories = c.showAllCategories,
             upcomingPayments = payments.take(MAX_UPCOMING),
             groups = groups.map { GroupUi(it.id, it.name, it.type, it.netBalance) },
+            owedToYouMinor = balances.filter { it > 0 }.sum(),
+            youOweMinor = balances.filter { it < 0 }.sumOf { -it },
         )
     }.stateInUi(viewModelScope)
 

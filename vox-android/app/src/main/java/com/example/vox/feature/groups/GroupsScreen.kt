@@ -26,7 +26,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.vox.R
 import com.example.vox.core.designsystem.component.BalanceText
-import com.example.vox.core.designsystem.component.EmptyState
 import com.example.vox.core.designsystem.component.IconBadge
 import com.example.vox.core.designsystem.component.UiStateContent
 import com.example.vox.core.designsystem.component.VoxTopBar
@@ -57,16 +56,6 @@ fun GroupsScreen(state: UiState<GroupsUiModel>, onBack: () -> Unit, onCreate: ()
         },
     ) { padding ->
         UiStateContent(state, Modifier.padding(padding)) { model ->
-            if (model.groups.isEmpty()) {
-                EmptyState(
-                    title = stringResource(R.string.groups_empty_title),
-                    body = stringResource(R.string.groups_empty_body),
-                    actionLabel = stringResource(R.string.groups_empty_action),
-                    onAction = onCreate,
-                    modifier = Modifier.padding(padding),
-                )
-                return@UiStateContent
-            }
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
@@ -76,6 +65,18 @@ fun GroupsScreen(state: UiState<GroupsUiModel>, onBack: () -> Unit, onCreate: ()
                 verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small),
             ) {
                 item(key = "totals") { Totals(model.owedToYou, model.youOwe) }
+                if (model.groups.isEmpty()) {
+                    item(key = "empty") {
+                        Column(
+                            Modifier.fillMaxWidth().padding(top = VoxSpacing.Medium),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small),
+                        ) {
+                            Text(stringResource(R.string.groups_empty_title), style = MaterialTheme.typography.titleLarge)
+                            Text(stringResource(R.string.groups_empty_body), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
                 items(model.groups, key = { it.group.id }) { item ->
                     GroupCard(item, onClick = { onOpenGroup(item.group.id) })
                 }
@@ -88,13 +89,23 @@ fun GroupsScreen(state: UiState<GroupsUiModel>, onBack: () -> Unit, onCreate: ()
 private fun Totals(owedToYou: Money, youOwe: Money) {
     val money = LocalMoneyFormatter.current
     Row(Modifier.fillMaxWidth().padding(vertical = VoxSpacing.Small), horizontalArrangement = Arrangement.spacedBy(VoxSpacing.Medium)) {
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-            Text(stringResource(R.string.groups_owed_to_you), style = MaterialTheme.typography.labelLarge)
-            Text(money.format(owedToYou), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+        Card(
+            Modifier.weight(1f).semantics(mergeDescendants = true) {},
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        ) {
+            Column(Modifier.padding(VoxSpacing.Medium), verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small)) {
+                Text(stringResource(R.string.groups_you_owe), style = MaterialTheme.typography.labelLarge)
+                Text(money.format(youOwe), style = MaterialTheme.typography.headlineSmall)
+            }
         }
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-            Text(stringResource(R.string.groups_you_owe), style = MaterialTheme.typography.labelLarge)
-            Text(money.format(youOwe), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.error)
+        Card(
+            Modifier.weight(1f).semantics(mergeDescendants = true) {},
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        ) {
+            Column(Modifier.padding(VoxSpacing.Medium), verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small)) {
+                Text(stringResource(R.string.groups_owed_to_you), style = MaterialTheme.typography.labelLarge)
+                Text(money.format(owedToYou), style = MaterialTheme.typography.headlineSmall)
+            }
         }
     }
 }

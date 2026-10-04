@@ -21,6 +21,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -56,6 +58,7 @@ import com.example.vox.core.ui.icon
 import com.example.vox.core.designsystem.theme.LocalMoneyFormatter
 import com.example.vox.feature.home.components.GroupSummaryCard
 import com.example.vox.feature.home.components.SpendingSummaryCard
+import com.example.vox.domain.model.Money
 import java.time.YearMonth
 import java.math.BigDecimal
 import java.util.Currency
@@ -158,6 +161,27 @@ fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onCreateRecurri
                         Text("Your circles", style = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.clickable { onAction(HomeAction.OpenGroups) }.semantics { heading() })
                         IconButton(onClick = onCreateGroup) { Icon(VoxIcons.Add, contentDescription = "Add group") }
+                    }
+                }
+            }
+            item(key = "group-balances") {
+                val currency = model.summary.spending.currencyCode
+                val money = LocalMoneyFormatter.current
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("YOU OWE", color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelMedium)
+                            Text(money.format(Money(model.youOweMinor, currency)), style = MaterialTheme.typography.headlineSmall)
+                        }
+                    }
+                    Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("OWED TO YOU", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium)
+                            Text(money.format(Money(model.owedToYouMinor, currency)), style = MaterialTheme.typography.headlineSmall)
+                        }
                     }
                 }
             }
