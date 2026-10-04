@@ -1,29 +1,41 @@
 package com.example.vox.app
 
 import android.app.Application
-import com.example.vox.data.fake.FakeGroupRepository
-import com.example.vox.data.fake.FakeReceiptRepository
-import com.example.vox.data.fake.FakeRecurringPaymentRepository
-import com.example.vox.data.fake.FakeTransactionRepository
-import com.example.vox.data.fake.FakeUserRepository
-import com.example.vox.data.fake.FakeVoiceAssistant
-import com.example.vox.domain.repository.GroupRepository
-import com.example.vox.domain.repository.ReceiptRepository
-import com.example.vox.domain.repository.RecurringPaymentRepository
-import com.example.vox.domain.repository.TransactionRepository
-import com.example.vox.domain.repository.UserRepository
-import com.example.vox.domain.repository.VoiceAssistant
+import android.content.Context
+import com.example.vox.data.remote.*
+import com.example.vox.domain.repository.*
 
-/** Manual DI. Swap a Fake* for a Room/API implementation here; nothing above the domain layer changes. */
-class AppContainer {
-    val transactionRepository: TransactionRepository = FakeTransactionRepository()
-    val groupRepository: GroupRepository = FakeGroupRepository()
-    val recurringPaymentRepository: RecurringPaymentRepository = FakeRecurringPaymentRepository()
-    val receiptRepository: ReceiptRepository = FakeReceiptRepository()
-    val userRepository: UserRepository = FakeUserRepository()
-    val voiceAssistant: VoiceAssistant = FakeVoiceAssistant()
+class AppContainer(context: Context) {
+    private val api = Api(context)
+    val transactionRepository = RemoteTransactionRepository(api)
+    val groupRepository = RemoteGroupRepository(context, api)
+    val recurringPaymentRepository = RemoteRecurringRepository(api)
+    val budgetRepository = RemoteBudgetRepository(api)
+    val userRepository = RemoteUserRepository(api, ::refresh, ::clear)
+    val receiptRepository: ReceiptRepository = UnavailableReceiptRepository()
+    val voiceAssistant: VoiceAssistant = UnavailableVoiceAssistant()
+
+    suspend fun restoreSession(): Boolean {
+        if (!api.hasSession) return false
+        return runCatching { refresh(); true }.getOrDefault(false)
+    }
+
+    private suspend fun refresh() {
+        userRepository.refresh()
+        transactionRepository.refresh()
+        groupRepository.refresh()
+        recurringPaymentRepository.refresh()
+        budgetRepository.refresh()
+    }
+
+    private fun clear() {
+        transactionRepository.clear()
+        groupRepository.clear()
+        recurringPaymentRepository.clear()
+        budgetRepository.clear()
+    }
 }
 
 class VoxApplication : Application() {
-    val container by lazy { AppContainer() }
+    val container by lazy { AppContainer(this) }
 }

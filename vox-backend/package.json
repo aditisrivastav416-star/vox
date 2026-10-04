@@ -8,6 +8,7 @@
     "worker": "node dist/worker.js",
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev",
+    "db:seed-test": "npm run build && node --env-file=.env scripts/seed-test.cjs",
     "test": "node --test test/*.test.cjs"
   },
   "dependencies": {

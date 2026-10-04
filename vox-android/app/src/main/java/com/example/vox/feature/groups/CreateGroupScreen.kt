@@ -1,6 +1,13 @@
 package com.example.vox.feature.groups
 
 import androidx.compose.foundation.layout.Arrangement
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -19,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,14 +49,25 @@ import com.example.vox.domain.model.Person
 
 @Composable
 fun CreateGroupRoute(viewModel: CreateGroupViewModel, onBack: () -> Unit, onCreated: (String) -> Unit) {
+    val context = LocalContext.current
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.syncContacts()
+    }
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
+        else permission.launch(Manifest.permission.READ_CONTACTS)
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     ObserveEvents(viewModel.events) { if (it is CreateGroupEvent.Created) onCreated(it.groupId) }
-    CreateGroupScreen(state, viewModel::onAction, onBack)
+    CreateGroupScreen(state, viewModel::onAction, onBack) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
+        else permission.launch(Manifest.permission.READ_CONTACTS)
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CreateGroupScreen(state: CreateGroupUiState, onAction: (CreateGroupAction) -> Unit, onBack: () -> Unit) {
+fun CreateGroupScreen(state: CreateGroupUiState, onAction: (CreateGroupAction) -> Unit, onBack: () -> Unit, onSyncContacts: () -> Unit = {}) {
     Scaffold(
         topBar = { VoxTopBar(stringResource(R.string.create_group), onBack = onBack) },
         bottomBar = {
@@ -86,6 +105,7 @@ fun CreateGroupScreen(state: CreateGroupUiState, onAction: (CreateGroupAction) -
             }
             item(key = "people") {
                 Text(stringResource(R.string.group_add_people), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = VoxSpacing.Small))
+                TextButton(onClick = onSyncContacts) { Text("Sync contacts") }
                 OutlinedTextField(
                     value = state.query,
                     onValueChange = { onAction(CreateGroupAction.QueryChanged(it)) },
@@ -97,6 +117,8 @@ fun CreateGroupScreen(state: CreateGroupUiState, onAction: (CreateGroupAction) -
                 if (state.showMembersError) {
                     Text(stringResource(R.string.error_group_members_required), color = MaterialTheme.colorScheme.error)
                 }
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (state.contacts.isEmpty()) Text("Registered Vox contacts will appear here after sync.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(state.contacts, key = { it.id }) { person ->
                 ContactRow(person, selected = person.id in state.selectedIds) { onAction(CreateGroupAction.ToggleMember(person.id)) }

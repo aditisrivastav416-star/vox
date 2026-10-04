@@ -40,6 +40,7 @@ data class TransactionFormUiState(
     val showAmountError: Boolean = false,
     val showTitleError: Boolean = false,
     val showDatePicker: Boolean = false,
+    val error: String? = null,
 ) {
     val categories: List<Category> get() = Category.forType(type)
 }
@@ -149,8 +150,10 @@ class TransactionFormViewModel(
             notes = s.notes.trim().ifBlank { null },
         )
         viewModelScope.launch {
-            transactionRepository.upsert(transaction)
-            _events.send(TransactionFormEvent.Saved)
+            try {
+                transactionRepository.upsert(transaction)
+                _events.send(TransactionFormEvent.Saved)
+            } catch (e: Exception) { _state.update { it.copy(error = e.message ?: "Could not save transaction") } }
         }
     }
 }

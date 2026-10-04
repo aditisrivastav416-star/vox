@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.vox.R
@@ -91,14 +89,7 @@ fun ProfileSetupScreen(
                 optionLabel = { currencyLabel(it) },
                 onSelect = { onAction(AuthAction.CurrencyChanged(it)) },
             )
-            OutlinedTextField(
-                value = state.phone,
-                onValueChange = { onAction(AuthAction.PhoneChanged(it)) },
-                label = { Text(stringResource(R.string.profile_phone_optional)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 onClick = { onAction(AuthAction.Save) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),

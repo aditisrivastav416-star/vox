@@ -19,6 +19,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "API_BASE_URL", "\"${System.getenv("VOX_API_BASE_URL") ?: "http://10.0.2.2:3000/api/v1"}\"")
     }
 
     buildTypes {
@@ -34,6 +35,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

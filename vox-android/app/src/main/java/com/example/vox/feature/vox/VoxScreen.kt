@@ -123,6 +123,10 @@ fun VoxScreen(state: VoxUiState, onAction: (VoxAction) -> Unit) {
                     VoxUiState.Idle -> IdleContent(onAction)
                     VoxUiState.Listening -> ListeningContent(onAction)
                     is VoxUiState.Recognized -> RecognizedContent(state.result, onAction)
+                    is VoxUiState.Error -> {
+                        Text(state.message, color = MaterialTheme.colorScheme.error)
+                        androidx.compose.material3.TextButton(onClick = { onAction(VoxAction.TypeInstead()) }) { Text("Type instead") }
+                    }
                 }
             }
         }

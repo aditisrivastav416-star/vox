@@ -56,7 +56,7 @@ import com.example.vox.core.designsystem.theme.VoxAppearance
 import com.example.vox.core.designsystem.theme.VoxDisplayFont
 
 @Composable
-fun WelcomeScreen(onContinueWithEmail: () -> Unit) {
+fun WelcomeScreen(state: ProfileSetupUiState, onAction: (AuthAction) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
@@ -103,26 +103,43 @@ fun WelcomeScreen(onContinueWithEmail: () -> Unit) {
         Spacer(Modifier.height(3.dp))
         Text("Everything you spend, split, and save. Beautifully in sync.", fontSize = 12.sp, lineHeight = 19.sp, color = muted, modifier = Modifier.width(270.dp))
         Spacer(Modifier.height(14.dp))
-        Text("Email address", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = ink)
+        Text(if (state.stage == SignupStage.LOGIN) "Email or phone" else "Sign up with email or phone", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = ink)
         Spacer(Modifier.height(2.dp))
-        OutlinedTextField(email, { email = it; showError = false }, Modifier.fillMaxWidth().height(52.dp), placeholder = { Text("you@example.com", fontSize = 12.sp) },
+        OutlinedTextField(if (state.stage == SignupStage.LOGIN) email else state.identifier,
+            { if (state.stage == SignupStage.LOGIN) email = it else onAction(AuthAction.IdentifierChanged(it)); showError = false },
+            Modifier.fillMaxWidth().height(52.dp), placeholder = { Text("you@example.com or +91…", fontSize = 12.sp) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), shape = RoundedCornerShape(12.dp),
             colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow))
         Spacer(Modifier.height(10.dp))
-        Text("Password", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = ink)
-        Spacer(Modifier.height(2.dp))
-        OutlinedTextField(password, { password = it; showError = false }, Modifier.fillMaxWidth().height(52.dp), placeholder = { Text("At least 4 characters", fontSize = 12.sp) },
-            singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp),
-            colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow))
-        if (showError) Text("Enter a valid email and at least 4 characters.", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+        if (state.stage == SignupStage.LOGIN || state.stage == SignupStage.PASSWORD) {
+            Text("Password", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = ink)
+            Spacer(Modifier.height(2.dp))
+            OutlinedTextField(password, { password = it; showError = false }, Modifier.fillMaxWidth().height(52.dp), placeholder = { Text("At least 8 characters", fontSize = 12.sp) },
+                singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow))
+        }
+        var confirmPassword by remember { mutableStateOf("") }
+        if (state.stage == SignupStage.CODE) OutlinedTextField(state.code, { onAction(AuthAction.CodeChanged(it)) }, Modifier.fillMaxWidth(),
+            label = { Text("6-digit code") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        if (state.stage == SignupStage.PASSWORD) OutlinedTextField(confirmPassword, { confirmPassword = it }, Modifier.fillMaxWidth(),
+            label = { Text("Confirm password") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+        if (showError || state.error != null) Text(state.error ?: "Enter valid details.", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
         Spacer(Modifier.height(18.dp))
-        Button(onClick = { if (email.contains('@') && password.length >= 4) onContinueWithEmail() else showError = true },
+        Button(onClick = {
+            when (state.stage) {
+                SignupStage.LOGIN -> if (email.isNotBlank() && password.length >= 8) onAction(AuthAction.Login(email, password)) else showError = true
+                SignupStage.CONTACT -> onAction(AuthAction.RequestCode)
+                SignupStage.CODE -> onAction(AuthAction.VerifyCode)
+                SignupStage.PASSWORD -> onAction(AuthAction.FinishSignup(password, confirmPassword))
+            }
+        }, enabled = !state.busy,
             modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6750DD))) {
-            Text("Continue with email", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+            Text(when (state.stage) { SignupStage.LOGIN -> "Sign in"; SignupStage.CONTACT -> "Send code"; SignupStage.CODE -> "Verify code"; SignupStage.PASSWORD -> "Create account" }, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(10.dp))
             Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(19.dp))
         }
+        if (state.stage == SignupStage.LOGIN) androidx.compose.material3.TextButton(onClick = { onAction(AuthAction.StartSignup) }) { Text("Create an account") }
         Spacer(Modifier.height(23.dp))
         Text("Your finances, your space. No real bank connection required.", modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center, color = muted, fontSize = 10.sp)
@@ -131,4 +148,4 @@ fun WelcomeScreen(onContinueWithEmail: () -> Unit) {
 
 @Preview
 @Composable
-private fun WelcomeScreenPreview() { VoxTheme { WelcomeScreen({}) } }
+private fun WelcomeScreenPreview() { VoxTheme { WelcomeScreen(ProfileSetupUiState(), {}) } }

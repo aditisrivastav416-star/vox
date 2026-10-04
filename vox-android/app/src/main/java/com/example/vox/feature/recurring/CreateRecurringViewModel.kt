@@ -35,6 +35,7 @@ data class CreateRecurringUiState(
     val showNameError: Boolean = false,
     val showAmountError: Boolean = false,
     val showIntervalError: Boolean = false,
+    val error: String? = null,
 ) {
     val categories: List<Category> get() = Category.forType(TransactionType.EXPENSE)
 }
@@ -103,6 +104,7 @@ class CreateRecurringViewModel(
             return
         }
         viewModelScope.launch {
+            try {
             repository.upsert(
                 RecurringPayment(
                     id = UUID.randomUUID().toString(),
@@ -117,6 +119,7 @@ class CreateRecurringViewModel(
                 ),
             )
             _events.send(CreateRecurringEvent.Saved)
+            } catch (e: Exception) { _state.update { it.copy(error = e.message ?: "Could not save recurring payment") } }
         }
     }
 }

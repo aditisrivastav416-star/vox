@@ -49,6 +49,7 @@ data class HomeUiModel(
     val month: YearMonth,
     val canGoToNextMonth: Boolean,
     val summary: SpendingSummaryUi,
+    val budgetMinor: Long? = null,
     val showAllCategories: Boolean,
     val upcomingPayments: List<RecurringPayment>,
     val groups: List<GroupUi>,

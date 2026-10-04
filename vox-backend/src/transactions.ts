@@ -65,7 +65,7 @@ export class TransactionsController {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const saved = await this.db.transaction.findUnique({ where: { id } });
-        if (saved?.ownerId === req.user.id && saved.type === type && saved.amountMinor === minor(body.amountMinor) && saved.currencyCode === currencyCode && saved.title === title) return output(saved);
+        if (saved && saved.ownerId === req.user.id && saved.type === type && saved.amountMinor === minor(body.amountMinor) && saved.currencyCode === currencyCode && saved.title === title) return output(saved);
         throw new ConflictException('ID used for different transaction');
       }
       throw error;

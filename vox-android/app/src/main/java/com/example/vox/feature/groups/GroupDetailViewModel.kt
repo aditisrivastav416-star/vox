@@ -72,11 +72,11 @@ class GroupDetailViewModel(
             is GroupDetailAction.ShowSettleConfirmation -> showSettle.value = action.show
             GroupDetailAction.ConfirmSettle -> viewModelScope.launch {
                 showSettle.value = false
-                groupRepository.settleUp(groupId)
+                runCatching { groupRepository.settleUp(groupId) }
             }
             GroupDetailAction.DeleteGroup -> viewModelScope.launch {
-                _events.send(GroupDetailEvent.Deleted)
-                groupRepository.deleteGroup(groupId)
+                runCatching { groupRepository.deleteGroup(groupId) }
+                    .onSuccess { _events.send(GroupDetailEvent.Deleted) }
             }
             GroupDetailAction.AddExpense -> Unit // navigation
         }
