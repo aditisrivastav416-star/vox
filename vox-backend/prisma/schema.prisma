@@ -89,15 +89,18 @@ model Group {
 
 model Membership {
   groupId String @db.Uuid
-  userId  String @db.Uuid
+  memberId String @default(uuid()) @db.Uuid
+  userId  String? @db.Uuid
+  guestName String?
   role    String @default("MEMBER")
   group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   paidExpenses GroupExpense[] @relation("ExpensePayer")
   shares ExpenseShare[]
   settlementsFrom Settlement[] @relation("SettlementFrom")
   settlementsTo Settlement[] @relation("SettlementTo")
-  @@id([groupId, userId])
+  @@id([groupId, memberId])
+  @@unique([groupId, userId])
   @@index([userId])
 }
 
@@ -110,7 +113,7 @@ model GroupExpense {
   timestamp   DateTime
   createdAt   DateTime       @default(now())
   group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  payer       Membership     @relation("ExpensePayer", fields: [groupId, paidById], references: [groupId, userId])
+  payer       Membership     @relation("ExpensePayer", fields: [groupId, paidById], references: [groupId, memberId])
   shares      ExpenseShare[]
   @@unique([id, groupId])
 }
@@ -118,11 +121,11 @@ model GroupExpense {
 model ExpenseShare {
   expenseId   String       @db.Uuid
   groupId     String       @db.Uuid
-  userId      String       @db.Uuid
+  memberId    String       @db.Uuid
   amountMinor BigInt
   expense     GroupExpense @relation(fields: [expenseId, groupId], references: [id, groupId], onDelete: Cascade)
-  member      Membership   @relation(fields: [groupId, userId], references: [groupId, userId])
-  @@id([expenseId, userId])
+  member      Membership   @relation(fields: [groupId, memberId], references: [groupId, memberId])
+  @@id([expenseId, memberId])
 }
 
 model Settlement {
@@ -133,8 +136,8 @@ model Settlement {
   amountMinor BigInt
   createdAt   DateTime @default(now())
   group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  from        Membership @relation("SettlementFrom", fields: [groupId, fromId], references: [groupId, userId])
-  to          Membership @relation("SettlementTo", fields: [groupId, toId], references: [groupId, userId])
+  from        Membership @relation("SettlementFrom", fields: [groupId, fromId], references: [groupId, memberId])
+  to          Membership @relation("SettlementTo", fields: [groupId, toId], references: [groupId, memberId])
 }
 
 model Receipt {

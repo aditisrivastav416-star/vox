@@ -161,8 +161,9 @@ class RemoteGroupRepository(private val context: Context, private val api: Api) 
             Group(
                 g.getString("id"), g.getString("name"), GroupType.valueOf(g.getString("type")), currency,
                 g.getJSONArray("members").objects().map { m ->
-                    val u = m.getJSONObject("user")
-                    Person(own(u.getString("id")), u.getString("name"), u.nullable("email"))
+                    val u = m.optJSONObject("user")
+                    if (u != null) Person(own(m.getString("memberId")), u.getString("name"), u.nullable("email"))
+                    else Person(m.getString("memberId"), m.getString("guestName"), isOnVox = false)
                 },
                 g.getJSONArray("expenses").objects().map { e ->
                     val shares = e.getJSONObject("shares")
@@ -209,15 +210,24 @@ class RemoteGroupRepository(private val context: Context, private val api: Api) 
             api.request("POST", "/groups/contacts/lookup", json("identifiers" to JSONArray(batch)))
                 .getJSONArray("items").objects()
         }
-        contacts.value = matched.filter { it.getString("id") != api.userId }.map { u ->
+        val registered = matched.filter { it.getString("id") != api.userId }.map { u ->
             val identifier = u.getString("identifier")
             Person(u.getString("id"), device[identifier] ?: u.getString("name").ifBlank { identifier }, identifier)
         }.distinctBy { it.id }
+        val registeredNames = registered.map { it.name }.toSet()
+        val matchedIdentifiers = matched.map { it.getString("identifier") }.toSet()
+        contacts.value = registered + device.filter { (identifier, name) ->
+            identifier !in matchedIdentifiers && name !in registeredNames
+        }.map { (identifier, name) ->
+            Person("guest:$identifier", name.ifBlank { identifier }, identifier, isOnVox = false)
+        }
     }
-    override suspend fun createGroup(name: String, type: GroupType, memberIds: List<String>): String {
+    override suspend fun createGroup(name: String, type: GroupType, members: List<Person>): String {
         val currency = api.request("GET", "/users/me").getString("currencyCode")
         val id = api.request("POST", "/groups", json(
-            "name" to name, "type" to type.name, "currencyCode" to currency, "memberIds" to JSONArray(memberIds)
+            "name" to name, "type" to type.name, "currencyCode" to currency,
+            "memberIds" to JSONArray(members.filter { it.isOnVox }.map { it.id }),
+            "guestNames" to JSONArray(members.filterNot { it.isOnVox }.map { it.name }),
         )).getString("id")
         refresh()
         return id

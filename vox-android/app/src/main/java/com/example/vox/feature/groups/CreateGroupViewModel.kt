@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -93,7 +94,8 @@ class CreateGroupViewModel(private val groupRepository: GroupRepository) : ViewM
                 }
                 viewModelScope.launch {
                     try {
-                        val id = groupRepository.createGroup(f.name.trim(), f.type, f.selectedIds.toList())
+                        val selected = groupRepository.observeContacts().first().filter { it.id in f.selectedIds }
+                        val id = groupRepository.createGroup(f.name.trim(), f.type, selected)
                         _events.send(CreateGroupEvent.Created(id))
                     } catch (e: Exception) { form.update { it.copy(error = e.message ?: "Could not create group") } }
                 }

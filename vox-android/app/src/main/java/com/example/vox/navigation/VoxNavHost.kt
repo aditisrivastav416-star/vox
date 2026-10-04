@@ -106,6 +106,7 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                     HomeViewModel(transactionRepository, groupRepository, recurringPaymentRepository, userRepository, budgetRepository)
                 },
                 onOpenRecurring = { navController.navigate(D.RECURRING) },
+                onCreateRecurring = { navController.navigate(D.RECURRING_CREATE) },
                 onOpenGroups = { navController.navigate(D.GROUPS) },
                 onCreateGroup = { navController.navigate(D.GROUP_CREATE) },
                 onOpenGroup = { navController.navigate(D.groupDetail(it)) },
