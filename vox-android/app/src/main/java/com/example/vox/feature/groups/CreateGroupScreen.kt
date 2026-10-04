@@ -5,7 +5,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,18 +53,27 @@ import com.example.vox.domain.model.Person
 @Composable
 fun CreateGroupRoute(viewModel: CreateGroupViewModel, onBack: () -> Unit, onCreated: (String) -> Unit) {
     val context = LocalContext.current
+    var showContactConsent by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.syncContacts()
     }
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
-        else permission.launch(Manifest.permission.READ_CONTACTS)
-    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     ObserveEvents(viewModel.events) { if (it is CreateGroupEvent.Created) onCreated(it.groupId) }
-    CreateGroupScreen(state, viewModel::onAction, onBack) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
-        else permission.launch(Manifest.permission.READ_CONTACTS)
+    CreateGroupScreen(state, viewModel::onAction, onBack) { showContactConsent = true }
+    if (showContactConsent) {
+        AlertDialog(
+            onDismissRequest = { showContactConsent = false },
+            title = { Text("Sync contacts?") },
+            text = { Text("Vox will read your contacts and send their phone numbers and email addresses to find people on Vox. People who aren't on Vox can still be added to your group. Their names are saved only if you add them.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showContactConsent = false
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) viewModel.syncContacts()
+                    else permission.launch(Manifest.permission.READ_CONTACTS)
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { showContactConsent = false }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -118,7 +130,7 @@ fun CreateGroupScreen(state: CreateGroupUiState, onAction: (CreateGroupAction) -
                     Text(stringResource(R.string.error_group_members_required), color = MaterialTheme.colorScheme.error)
                 }
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                if (state.contacts.isEmpty()) Text("Registered Vox contacts will appear here after sync.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (state.contacts.isEmpty()) Text("Sync contacts to add people, including those not on Vox.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(state.contacts, key = { it.id }) { person ->
                 ContactRow(person, selected = person.id in state.selectedIds) { onAction(CreateGroupAction.ToggleMember(person.id)) }
@@ -139,7 +151,10 @@ private fun ContactRow(person: Person, selected: Boolean, onToggle: () -> Unit) 
         horizontalArrangement = Arrangement.spacedBy(VoxSpacing.Medium),
     ) {
         Avatar(person.name)
-        Text(person.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+            Text(person.name, style = MaterialTheme.typography.bodyLarge)
+            if (!person.isOnVox) Text("Not on Vox", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         // Row is a toggleable checkbox; TalkBack announces the state, so the icon is decorative.
         Icon(if (selected) VoxIcons.Check else VoxIcons.Add, contentDescription = null)
     }

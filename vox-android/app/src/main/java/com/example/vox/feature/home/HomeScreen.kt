@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.vox.R
 import com.example.vox.core.designsystem.component.IconBadge
-import com.example.vox.core.designsystem.component.SectionHeader
 import com.example.vox.core.designsystem.component.UiStateContent
 import com.example.vox.core.designsystem.icon.VoxIcons
 import com.example.vox.core.designsystem.theme.LocalDateFormatter
@@ -65,6 +64,7 @@ import java.util.Currency
 fun HomeRoute(
     viewModel: HomeViewModel,
     onOpenRecurring: () -> Unit,
+    onCreateRecurring: () -> Unit,
     onOpenGroups: () -> Unit,
     onCreateGroup: () -> Unit,
     onOpenGroup: (String) -> Unit,
@@ -93,11 +93,17 @@ fun HomeRoute(
         }) { Text("Save") } },
         dismissButton = { TextButton(onClick = { editingBudget = false }) { Text("Cancel") } },
     )
-    HomeScreen(state, onSetBudget = { editingBudget = true }) { action ->
+    HomeScreen(state, onSetBudget = {
+        val model = (state as? UiState.Success)?.data
+        val currency = model?.summary?.spending?.currencyCode ?: "INR"
+        val digits = Currency.getInstance(currency).defaultFractionDigits
+        budgetText = model?.budgetMinor?.let { BigDecimal.valueOf(it, digits).toPlainString() }.orEmpty()
+        invalidBudget = false
+        editingBudget = true
+    }, onCreateRecurring = onCreateRecurring, onCreateGroup = onCreateGroup) { action ->
         when (action) {
             HomeAction.OpenRecurring -> onOpenRecurring()
             HomeAction.OpenGroups -> onOpenGroups()
-            HomeAction.CreateGroup -> onCreateGroup()
             is HomeAction.OpenGroup -> onOpenGroup(action.groupId)
             is HomeAction.OpenTransaction -> onOpenTransaction(action.transactionId)
             else -> viewModel.onAction(action)
@@ -106,7 +112,7 @@ fun HomeRoute(
 }
 
 @Composable
-fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (HomeAction) -> Unit) {
+fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onCreateRecurring: () -> Unit = {}, onCreateGroup: () -> Unit = {}, onAction: (HomeAction) -> Unit) {
     UiStateContent(state) { model ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -116,6 +122,7 @@ fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (Home
             item(key = "summary") {
                 SpendingSummaryCard(
                     summary = model.summary,
+                    month = model.month,
                     budgetMinor = model.budgetMinor,
                     onSetBudget = onSetBudget,
                     showAllCategories = model.showAllCategories,
@@ -128,8 +135,11 @@ fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (Home
             item(key = "upcoming-header") {
                 Column(Modifier.padding(start = 25.dp, end = 20.dp, top = 24.dp)) {
                     Text("ON THE RADAR", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                    SectionHeader(title = "Coming up", actionLabel = "${model.upcomingPayments.size} recurring",
-                        onAction = { onAction(HomeAction.OpenRecurring) })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Coming up", style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.clickable { onAction(HomeAction.OpenRecurring) }.semantics { heading() })
+                        IconButton(onClick = onCreateRecurring) { Icon(VoxIcons.Add, contentDescription = "Add recurring payment") }
+                    }
                 }
             }
             items(model.upcomingPayments, key = { "upcoming-${it.id}" }) { payment ->
@@ -144,8 +154,11 @@ fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (Home
             item(key = "groups-header") {
                 Column(Modifier.padding(start = 25.dp, end = 20.dp, top = 24.dp)) {
                     Text("BETTER TOGETHER", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                    SectionHeader(title = "Your circles", actionLabel = "${model.groups.size} groups",
-                        onAction = { onAction(HomeAction.OpenGroups) })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Your circles", style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.clickable { onAction(HomeAction.OpenGroups) }.semantics { heading() })
+                        IconButton(onClick = onCreateGroup) { Icon(VoxIcons.Add, contentDescription = "Add group") }
+                    }
                 }
             }
             item(key = "groups") {
@@ -163,8 +176,7 @@ fun HomeScreen(state: HomeUiState, onSetBudget: () -> Unit = {}, onAction: (Home
                             Icon(VoxIcons.Forward, contentDescription = null)
                         }
                     }
-                    if (model.groups.isEmpty()) Text(stringResource(R.string.create_group),
-                        Modifier.fillMaxWidth().clickable { onAction(HomeAction.CreateGroup) }.padding(16.dp))
+                    if (model.groups.isEmpty()) Text("No groups yet", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 

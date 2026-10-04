@@ -26,7 +26,7 @@ interface GroupRepository {
     fun observeContacts(): Flow<List<Person>>
     suspend fun syncContacts()
     /** Returns the new group's id. */
-    suspend fun createGroup(name: String, type: GroupType, memberIds: List<String>): String
+    suspend fun createGroup(name: String, type: GroupType, members: List<Person>): String
     suspend fun addExpense(groupId: String, expense: GroupExpense)
     suspend fun settleUp(groupId: String)
     suspend fun deleteGroup(groupId: String)

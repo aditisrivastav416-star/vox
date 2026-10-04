@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
-import { IsArray, IsIn, IsObject, IsString, IsUUID, Length, Matches } from 'class-validator';
+import { IsArray, IsIn, IsObject, IsOptional, IsString, IsUUID, Length, Matches } from 'class-validator';
 import { AuthGuard, Db, date, minor } from './core';
 
 class GroupInput {
@@ -7,6 +7,7 @@ class GroupInput {
   @IsIn(['TRIP','HOME','FRIENDS','OTHER']) type!: string;
   @Matches(/^[A-Z]{3}$/) currencyCode!: string;
   @IsArray() @IsUUID('4', { each: true }) memberIds!: string[];
+  @IsOptional() @IsArray() guestNames?: string[];
 }
 class ExpenseInput {
   @IsUUID() id!: string;
@@ -32,19 +33,23 @@ export class GroupsController {
   @Post() async create(@Req() req: any, @Body() body: GroupInput) {
     const ids = [...new Set([req.user.id, ...body.memberIds])];
     if (await this.db.user.count({ where: { id: { in: ids } } }) !== ids.length) throw new BadRequestException('Unknown member');
-    return this.db.group.create({ data: { name: body.name, type: body.type, currencyCode: body.currencyCode, members: { create: ids.map(userId => ({ userId, role: userId === req.user.id ? 'OWNER' : 'MEMBER' })) } }, include: { members: true } });
+    if (body.guestNames && (body.guestNames.length > 100 || body.guestNames.some(name => typeof name !== 'string' || !name.trim() || name.length > 100))) throw new BadRequestException('Invalid guest names');
+    return this.db.group.create({ data: { name: body.name, type: body.type, currencyCode: body.currencyCode, members: { create: [
+      ...ids.map(userId => ({ memberId: userId, userId, role: userId === req.user.id ? 'OWNER' : 'MEMBER' })),
+      ...(body.guestNames || []).map(name => ({ guestName: name.trim(), role: 'MEMBER' })),
+    ] } }, include: { members: true } });
   }
   @Get(':id') async one(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     await this.member(req.user.id, id);
     const group = await this.db.group.findUniqueOrThrow({ where: { id }, include: { members: { include: { user: { select: { id: true, name: true, email: true } } } }, expenses: { include: { shares: true } }, settlements: true } });
-    return { ...group, expenses: group.expenses.map(e => ({ ...e, amountMinor: e.amountMinor.toString(), shares: Object.fromEntries(e.shares.map(s => [s.userId, s.amountMinor.toString()])) })), settlements: group.settlements.map(s => ({ ...s, amountMinor: s.amountMinor.toString() })) };
+    return { ...group, expenses: group.expenses.map(e => ({ ...e, amountMinor: e.amountMinor.toString(), shares: Object.fromEntries(e.shares.map(s => [s.memberId, s.amountMinor.toString()])) })), settlements: group.settlements.map(s => ({ ...s, amountMinor: s.amountMinor.toString() })) };
   }
   @Post(':id/expenses') async expense(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() body: ExpenseInput) {
     await this.member(req.user.id, id);
-    const members = await this.db.membership.findMany({ where: { groupId: id }, select: { userId: true } });
-    const ids = new Set(members.map(m => m.userId));
+    const members = await this.db.membership.findMany({ where: { groupId: id }, select: { memberId: true } });
+    const ids = new Set(members.map(m => m.memberId));
     if (!ids.has(body.paidById) || !body.shares || Object.keys(body.shares).some(k => !ids.has(k))) throw new BadRequestException('Invalid participant');
-    const shares = Object.entries(body.shares).map(([userId, value]) => ({ groupId: id, userId, amountMinor: minor(value) }));
+    const shares = Object.entries(body.shares).map(([memberId, value]) => ({ groupId: id, memberId, amountMinor: minor(value) }));
     if (!shares.length || shares.reduce((n,s) => n + s.amountMinor, 0n) !== minor(body.amountMinor)) throw new BadRequestException('Shares must sum to total');
     const existing = await this.db.groupExpense.findUnique({ where: { id: body.id } });
     if (existing) { if (existing.groupId !== id) throw new BadRequestException('ID already used'); return { id: existing.id }; }
@@ -52,7 +57,7 @@ export class GroupsController {
   }
   @Get(':id/balances') async balances(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const g = await this.one(req, id);
-    const balance = new Map<string,bigint>(g.members.map(m => [m.userId, 0n]));
+    const balance = new Map<string,bigint>(g.members.map(m => [m.memberId, 0n]));
     for (const e of g.expenses) { balance.set(e.paidById, balance.get(e.paidById)! + BigInt(e.amountMinor)); for (const [userId, amount] of Object.entries(e.shares)) balance.set(userId, balance.get(userId)! - BigInt(amount as string)); }
     for (const s of g.settlements) { balance.set(s.fromId, balance.get(s.fromId)! + BigInt(s.amountMinor)); balance.set(s.toId, balance.get(s.toId)! - BigInt(s.amountMinor)); }
     return { currencyCode: g.currencyCode, balances: Object.fromEntries([...balance].map(([id, n]) => [id, n.toString()])) };
@@ -60,7 +65,7 @@ export class GroupsController {
   @Post(':id/settlements') async settle(@Req() req: any, @Param('id', ParseUUIDPipe) id: string, @Body() body: { fromId: string; toId: string; amountMinor: string }) {
     await this.member(req.user.id, id);
     const members = await this.db.membership.findMany({ where: { groupId: id } });
-    if (body.fromId === body.toId || (body.fromId !== req.user.id && body.toId !== req.user.id) || !members.some(m => m.userId === body.fromId) || !members.some(m => m.userId === body.toId) || minor(body.amountMinor) <= 0n) throw new BadRequestException('Invalid settlement');
+    if (body.fromId === body.toId || (body.fromId !== req.user.id && body.toId !== req.user.id) || !members.some(m => m.memberId === body.fromId) || !members.some(m => m.memberId === body.toId) || minor(body.amountMinor) <= 0n) throw new BadRequestException('Invalid settlement');
     const s = await this.db.settlement.create({ data: { groupId: id, fromId: body.fromId, toId: body.toId, amountMinor: minor(body.amountMinor) } });
     return { ...s, amountMinor: s.amountMinor.toString() };
   }

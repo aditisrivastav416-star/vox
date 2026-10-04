@@ -8,6 +8,7 @@ data class Person(
     val id: String,
     val name: String,
     val contact: String? = null,
+    val isOnVox: Boolean = true,
 )
 
 enum class GroupType { TRIP, HOME, FRIENDS, OTHER }

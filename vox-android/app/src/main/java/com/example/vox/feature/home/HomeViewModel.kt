@@ -84,7 +84,7 @@ class HomeViewModel(
             }
             is HomeAction.SelectMode -> controls.update { it.copy(mode = action.mode) }
             HomeAction.ToggleBreakdown -> controls.update { it.copy(showAllCategories = !it.showAllCategories) }
-            HomeAction.OpenRecurring, HomeAction.OpenGroups, HomeAction.CreateGroup,
+            HomeAction.OpenRecurring, HomeAction.OpenGroups,
             is HomeAction.OpenGroup, is HomeAction.OpenTransaction -> Unit // navigation, handled by the route
         }
     }

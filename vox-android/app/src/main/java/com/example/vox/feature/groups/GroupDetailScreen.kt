@@ -84,12 +84,13 @@ fun GroupDetailScreen(state: UiState<GroupDetailUiModel>, onBack: () -> Unit, on
                 item(key = "balance") { BalanceText(model.balance, amountStyle = MaterialTheme.typography.displaySmall) }
                 items(model.memberBalances, key = { "member-${it.person.id}" }) { member ->
                     val amount = money.format(member.balance.copy(amountMinor = kotlin.math.abs(member.balance.amountMinor)))
+                    val memberName = member.person.displayName() + if (member.person.isOnVox) "" else " (not on Vox)"
                     Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
                         Text(
                             if (member.balance.amountMinor > 0) {
-                                stringResource(R.string.member_owes_you, member.person.displayName())
+                                stringResource(R.string.member_owes_you, memberName)
                             } else {
-                                stringResource(R.string.you_owe_member, member.person.displayName())
+                                stringResource(R.string.you_owe_member, memberName)
                             },
                             modifier = Modifier.weight(1f),
                         )
