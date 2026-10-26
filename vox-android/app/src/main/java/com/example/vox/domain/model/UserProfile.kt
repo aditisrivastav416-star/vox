@@ -14,3 +14,8 @@ data class VoiceResult(
     val title: String,
     val category: Category,
 )
+
+sealed interface VoiceInteraction {
+    data class TransactionCommand(val result: VoiceResult) : VoiceInteraction
+    data class SpendingQuestion(val transcript: String) : VoiceInteraction
+}

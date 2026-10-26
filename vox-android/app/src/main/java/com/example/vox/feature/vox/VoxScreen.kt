@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -84,6 +87,9 @@ fun VoxRoute(
     onEditDetails: (VoiceResult) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (it) viewModel.onAction(VoxAction.StartListening)
+    }
     ObserveEvents(viewModel.events) { if (it == VoxEvent.Saved) onClose() }
     VoxScreen(state) { action ->
         when (action) {
@@ -92,6 +98,7 @@ fun VoxRoute(
             VoxAction.ScanReceipt -> onScanReceipt()
             VoxAction.SplitBill -> onSplitBill()
             is VoxAction.EditDetails -> onEditDetails(action.result)
+            VoxAction.StartListening -> permission.launch(Manifest.permission.RECORD_AUDIO)
             else -> viewModel.onAction(action)
         }
     }
@@ -123,6 +130,12 @@ fun VoxScreen(state: VoxUiState, onAction: (VoxAction) -> Unit) {
                     VoxUiState.Idle -> IdleContent(onAction)
                     VoxUiState.Listening -> ListeningContent(onAction)
                     is VoxUiState.Recognized -> RecognizedContent(state.result, onAction)
+                    is VoxUiState.Answer -> {
+                        Text(state.transcript, style = MaterialTheme.typography.bodyMedium)
+                        Text(state.reply, style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        Button(onClick = { onAction(VoxAction.StartListening) }) { Text("Ask another question") }
+                    }
                     is VoxUiState.Error -> {
                         Text(state.message, color = MaterialTheme.colorScheme.error)
                         androidx.compose.material3.TextButton(onClick = { onAction(VoxAction.TypeInstead()) }) { Text("Type instead") }
@@ -142,7 +155,7 @@ private fun IdleContent(onAction: (VoxAction) -> Unit) {
     }
     Text("YOUR MONEY, ON COMMAND", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
     Text("Just say the word.", style = MaterialTheme.typography.headlineMedium)
-    Text("Tap the mic, then say ‘Hey Vox, spent $24 on coffee.’ We'll take it from there.",
+    Text("Tap the mic and say ‘Spent ₹400 on groceries’ or ‘What has my spending been like this month?’",
         color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 13.sp)
     OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
         placeholder = { Text("Or type a transaction here...") },

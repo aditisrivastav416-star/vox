@@ -77,7 +77,7 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         composable(D.SPLASH) {
             LaunchedEffect(Unit) {
                 delay(1_200)
-                navController.navigate(if (app.container.restoreSession()) D.HOME else D.WELCOME) { popUpTo(D.SPLASH) { inclusive = true } }
+                navController.navigate(if (app.container.restoreSession()) D.HOME else D.PROFILE_SETUP) { popUpTo(D.SPLASH) { inclusive = true } }
             }
             SplashScreen()
         }
@@ -221,7 +221,7 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                 onOpenGroups = { navController.navigate(D.GROUPS) },
                 onOpenRecurring = { navController.navigate(D.RECURRING) },
                 onSignedOut = {
-                    navController.navigate(D.WELCOME) { popUpTo(navController.graph.id) { inclusive = true } }
+                    navController.navigate(D.PROFILE_SETUP) { popUpTo(navController.graph.id) { inclusive = true } }
                 },
             )
         }

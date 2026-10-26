@@ -1,39 +1,15 @@
-# Vox backend
+# Vox demo API
 
-NestJS/PostgreSQL API for the Vox Android app. All routes start with `/api/v1`.
+The Android app stores profile, transactions, budgets, recurring rules, and groups on the device. This NestJS service forwards short recordings to Gnani Prisma STT and spending answers to Gnani Timbre TTS; the Gnani key never goes into the APK. Generate the key with both Speech to Text and Text to Speech scopes.
 
-## Run
+## Run locally
 
-```sh
-cp .env.example .env
-docker compose up -d postgres
-npm install
-npm run db:migrate
-npm run start:dev
-npm run worker
-```
+Copy `.env.example` to `.env`, replace `GNANI_API_KEY` with a key generated in the [Gnani console](https://app.gnani.ai), then run `npm install` and `npm run start:dev` from this folder. The app's default debug URL is `http://10.0.2.2:3000/api/v1` in the Android emulator.
 
-Set `DATABASE_URL` and use HTTPS in production. The sample database credentials are for local use only. To send signup codes, set `RESEND_API_KEY` and `OTP_FROM_EMAIL` for email. For SMS, set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_VERIFY_SERVICE_SID` to use Twilio Verify. A paid Twilio account can instead use `TWILIO_FROM_PHONE` for direct SMS. Trial accounts require Verify's template and a verified recipient.
+`GET /api/v1/health` returns `{ "ok": true }`. `POST /api/v1/voice/transcribe` accepts JSON `{ "audioBase64": "...", "languageCode": "en-IN" }` and returns `{ "transcript": "..." }`. Audio is M4A, recorded for five seconds by the app, and forwarded to Gnani's `/stt/v3` endpoint. `POST /api/v1/voice/speak` accepts `{ "text": "..." }` and returns base64 MP3 audio from Timbre. The audio request body is limited to roughly 6 MB of decoded audio. These endpoints have no user authentication and should only be exposed for the limited challenge demo; add abuse controls before sharing a public APK widely.
 
-For a local test account after migration, run `npm run db:seed-test`. It creates or resets `test@gmail.com` with password `test@123` and gives it a ₹10,000 budget for the current month, only when the database host is localhost.
+## Vercel
 
-## Android contract
+Create a Vercel project with **Root Directory `vox-backend`**. NestJS `src/main.ts` is a supported Vercel entrypoint, so no custom `vercel.json` is needed. Add `GNANI_API_KEY` in Vercel Project Settings → Environment Variables. Deploy, test `https://YOUR-PROJECT.vercel.app/api/v1/health`, then build Android with `VOX_API_BASE_URL=https://YOUR-PROJECT.vercel.app/api/v1`. Never commit the real key or place it in Android Gradle configuration.
 
-Android debug builds call `http://10.0.2.2:3000/api/v1` from the emulator. For a physical device or deployed API, build with `VOX_API_BASE_URL=https://your-host/api/v1`.
-
-The Android app uses API repositories for users, transactions, budgets, groups, and recurring payments. Android's `CURRENT_USER_ID = "me"` is a local display alias; API IDs are UUIDs returned by `/auth/register` or `/auth/login`.
-
-- Signup: `POST /auth/signup/start` with `{ identifier }` (email or E.164 phone), `POST /auth/signup/verify` with `{ identifier, code }`, then `POST /auth/register` with `{ identifier, code, password, confirmPassword }`. Login uses `POST /auth/login` with `{ identifier, password }`. Successful registration/login returns `{ token, user }`. Send `Authorization: Bearer <token>`.
-- `GET/PUT /users/me`: `UserProfile` fields map to `name`, `currencyCode`, `phone`.
-- `POST /transactions`: send the Android `Transaction` fields flattened: `id`, `type`, `amountMinor` as a decimal string, `currencyCode`, `title`, `category`, `paymentMethod`, `timestamp` (ISO 8601), `source`, `groupId`, `notes`. The response also includes `amount: { amountMinor, currencyCode }` for direct model mapping and a `version`.
-- `PUT /transactions/:id`: same payload plus the last server `version`. `DELETE /transactions/:id?version=N` makes a sync tombstone. `GET /transactions/sync?cursor=...` returns changes, including tombstones, and a `nextCursor` for the next pull.
-- `GET /transactions` gives cursor-paginated Activity items, with `type`, `category`, `from`, `to`, and `search` filters.
-- `GET /analytics/summary`, `/analytics/categories`, `/analytics/timeline` power Home. Use `period=7d|month|year` or `from` and `to`.
-- `PUT /budgets` and `GET /budgets` store monthly budget values.
-- `POST /groups`, `GET /groups`, `GET /groups/:id`, `POST /groups/:id/expenses`, `GET /groups/:id/balances`, `POST /groups/:id/settlements` serve groups. Share keys are server user UUIDs and values are minor-unit strings.
-- `POST /groups/contacts/lookup` accepts up to 100 email/phone identifiers at a time and returns matching registered users. Android requests contacts permission before lookup; the server does not store the address book.
-- `POST/PUT /recurring-payments`, `GET /recurring-payments`, `GET /recurring-payments/:id/occurrences` serve recurring rules. Null `amountMinor` means a variable bill.
-
-Amounts use integer minor units as strings over JSON to preserve Kotlin `Long` precision. Timestamps are UTC ISO 8601; recurring dates use `YYYY-MM-DD`. Category, type, source, method, group type and frequency strings match Android enum names.
-
-Receipt OCR, assistant AI, push notifications, and password reset need external providers and are not configured. The worker creates due occurrences but never fabricates variable amounts.
+The previous PostgreSQL/Prisma API files remain in the repository, but the active module does not load them. Database migrations, workers, OTP, and email/SMS credentials are not used by this demo.

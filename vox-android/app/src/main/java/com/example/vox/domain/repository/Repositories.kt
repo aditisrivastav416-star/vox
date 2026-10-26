@@ -10,6 +10,7 @@ import com.example.vox.domain.model.RecurringPayment
 import com.example.vox.domain.model.Transaction
 import com.example.vox.domain.model.UserProfile
 import com.example.vox.domain.model.VoiceResult
+import com.example.vox.domain.model.VoiceInteraction
 import kotlinx.coroutines.flow.Flow
 
 interface TransactionRepository {
@@ -60,5 +61,6 @@ interface BudgetRepository {
 
 interface VoiceAssistant {
     /** Listens for one utterance and interprets it. */
-    suspend fun listen(): VoiceResult
+    suspend fun listen(): VoiceInteraction
+    suspend fun speak(text: String)
 }

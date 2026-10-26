@@ -26,7 +26,7 @@ class Api(context: Context) {
         try {
             connection.requestMethod = method
             connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
+            connection.readTimeout = 35_000
             connection.setRequestProperty("Accept", "application/json")
             prefs.getString("token", null)?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
             if (body != null) {

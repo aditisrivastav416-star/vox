@@ -6,6 +6,8 @@ import com.example.vox.domain.model.PaymentMethod
 import com.example.vox.domain.model.Transaction
 import com.example.vox.domain.model.TransactionSource
 import com.example.vox.domain.model.VoiceResult
+import com.example.vox.domain.model.VoiceInteraction
+import com.example.vox.domain.model.TransactionType
 import com.example.vox.domain.repository.TransactionRepository
 import com.example.vox.domain.repository.VoiceAssistant
 import kotlinx.coroutines.Job
@@ -15,13 +17,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
+import java.text.NumberFormat
+import java.util.Locale
 import java.util.UUID
 
 sealed interface VoxUiState {
     data object Idle : VoxUiState
     data object Listening : VoxUiState
     data class Recognized(val result: VoiceResult) : VoxUiState
+    data class Answer(val transcript: String, val reply: String) : VoxUiState
     data class Error(val message: String) : VoxUiState
 }
 
@@ -60,7 +68,16 @@ class VoxViewModel(
                 listenJob?.cancel()
                 _state.value = VoxUiState.Listening
                 listenJob = viewModelScope.launch {
-                    try { _state.value = VoxUiState.Recognized(voiceAssistant.listen()) }
+                    try {
+                        when (val interaction = voiceAssistant.listen()) {
+                            is VoiceInteraction.TransactionCommand -> _state.value = VoxUiState.Recognized(interaction.result)
+                            is VoiceInteraction.SpendingQuestion -> {
+                                val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first())
+                                _state.value = VoxUiState.Answer(interaction.transcript, reply)
+                                voiceAssistant.speak(reply)
+                            }
+                        }
+                    }
                     catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Voice recognition unavailable") }
                 }
             }
@@ -94,4 +111,15 @@ class VoxViewModel(
             } catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Could not save transaction") }
         }
     }
+}
+
+internal fun spendingAnswer(question: String, transactions: List<Transaction>): String {
+    val month = if ("last month" in question.lowercase()) YearMonth.now().minusMonths(1) else YearMonth.now()
+    val spent = transactions.filter {
+        it.type == TransactionType.EXPENSE && it.amount.currencyCode == "INR" &&
+            YearMonth.from(it.timestamp.atZone(ZoneId.systemDefault())) == month
+    }.sumOf { it.amount.amountMinor }
+    val rupees = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN")).format(spent / 100.0)
+    return if (month == YearMonth.now()) "You have spent $rupees so far this month."
+    else "You spent $rupees last month."
 }

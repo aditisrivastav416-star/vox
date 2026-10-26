@@ -264,5 +264,6 @@ class UnavailableReceiptRepository : ReceiptRepository {
 }
 
 class UnavailableVoiceAssistant : VoiceAssistant {
-    override suspend fun listen(): VoiceResult = error("Voice recognition is not configured")
+    override suspend fun listen(): VoiceInteraction = error("Voice recognition is not configured")
+    override suspend fun speak(text: String) = error("Voice synthesis is not configured")
 }
