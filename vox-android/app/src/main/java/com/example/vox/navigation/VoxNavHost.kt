@@ -122,7 +122,7 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         }
         dialog(D.VOX, dialogProperties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
             VoxRoute(
-                viewModel = voxViewModel { VoxViewModel(voiceAssistant, transactionRepository) },
+                viewModel = voxViewModel { VoxViewModel(voiceAssistant, transactionRepository, budgetRepository) },
                 onClose = back,
                 onTypeInstead = { replace(D.transactionForm(title = it.ifBlank { null })) },
                 onScanReceipt = { replace(D.RECEIPT_SCAN) },
@@ -169,6 +169,11 @@ fun VoxNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                 onBack = back,
                 onSaved = goHome,
                 onSplit = { receiptId -> navController.navigate(D.split(receiptId = receiptId)) },
+                onEdit = { receipt -> navController.navigate(D.transactionForm(
+                    amountMinor = receipt.total.amountMinor, title = receipt.merchant,
+                    category = com.example.vox.domain.model.Category.FOOD.name,
+                    type = com.example.vox.domain.model.TransactionType.EXPENSE.name,
+                )) },
             )
         }
         composable(D.SPLIT, arguments = optionalArgs(D.ARG_RECEIPT_ID, D.ARG_GROUP_ID)) {

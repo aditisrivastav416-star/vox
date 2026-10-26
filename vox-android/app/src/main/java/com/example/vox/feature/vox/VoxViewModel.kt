@@ -10,7 +10,9 @@ import com.example.vox.domain.model.VoiceInteraction
 import com.example.vox.domain.model.TransactionType
 import com.example.vox.domain.repository.TransactionRepository
 import com.example.vox.domain.repository.VoiceAssistant
+import com.example.vox.domain.repository.BudgetRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +39,7 @@ sealed interface VoxAction {
     data object StartListening : VoxAction
     data object CancelListening : VoxAction
     data object Confirm : VoxAction
+    data class LanguageChanged(val code: String) : VoxAction
 
     // Navigation
     data object Close : VoxAction
@@ -53,9 +56,12 @@ sealed interface VoxEvent {
 class VoxViewModel(
     private val voiceAssistant: VoiceAssistant,
     private val transactionRepository: TransactionRepository,
+    private val budgetRepository: BudgetRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<VoxUiState>(VoxUiState.Idle)
     val state: StateFlow<VoxUiState> = _state.asStateFlow()
+    private val _languageCode = MutableStateFlow("en-IN")
+    val languageCode: StateFlow<String> = _languageCode.asStateFlow()
 
     private val _events = Channel<VoxEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
@@ -69,15 +75,24 @@ class VoxViewModel(
                 _state.value = VoxUiState.Listening
                 listenJob = viewModelScope.launch {
                     try {
-                        when (val interaction = voiceAssistant.listen()) {
+                        when (val interaction = voiceAssistant.listen(_languageCode.value)) {
                             is VoiceInteraction.TransactionCommand -> _state.value = VoxUiState.Recognized(interaction.result)
                             is VoiceInteraction.SpendingQuestion -> {
-                                val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first())
+                                val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first(), _languageCode.value)
                                 _state.value = VoxUiState.Answer(interaction.transcript, reply)
-                                voiceAssistant.speak(reply)
+                                voiceAssistant.speak(reply, _languageCode.value)
+                            }
+                            is VoiceInteraction.SetBudget -> {
+                                val amount = interaction.amountMinor
+                                budgetRepository.setBudget(YearMonth.now().toString(), "INR", amount)
+                                val reply = if (_languageCode.value == "hi-IN") "इस महीने का बजट ${amount / 100} रुपये सेट हो गया है।"
+                                else "Your budget for this month is now ${amount / 100} rupees."
+                                _state.value = VoxUiState.Answer(interaction.transcript, reply)
+                                voiceAssistant.speak(reply, _languageCode.value)
                             }
                         }
                     }
+                    catch (e: CancellationException) { throw e }
                     catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Voice recognition unavailable") }
                 }
             }
@@ -86,6 +101,7 @@ class VoxViewModel(
                 _state.value = VoxUiState.Idle
             }
             VoxAction.Confirm -> confirm()
+            is VoxAction.LanguageChanged -> if (action.code in listOf("en-IN", "hi-IN")) _languageCode.value = action.code
             VoxAction.Close, is VoxAction.TypeInstead, VoxAction.ScanReceipt, VoxAction.SplitBill,
             is VoxAction.EditDetails -> Unit // navigation
         }
@@ -113,13 +129,15 @@ class VoxViewModel(
     }
 }
 
-internal fun spendingAnswer(question: String, transactions: List<Transaction>): String {
+internal fun spendingAnswer(question: String, transactions: List<Transaction>, languageCode: String = "en-IN"): String {
     val month = if ("last month" in question.lowercase()) YearMonth.now().minusMonths(1) else YearMonth.now()
     val spent = transactions.filter {
         it.type == TransactionType.EXPENSE && it.amount.currencyCode == "INR" &&
             YearMonth.from(it.timestamp.atZone(ZoneId.systemDefault())) == month
     }.sumOf { it.amount.amountMinor }
     val rupees = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN")).format(spent / 100.0)
-    return if (month == YearMonth.now()) "You have spent $rupees so far this month."
+    return if (languageCode == "hi-IN") {
+        if (month == YearMonth.now()) "इस महीने आपने $rupees खर्च किए हैं।" else "पिछले महीने आपने $rupees खर्च किए थे।"
+    } else if (month == YearMonth.now()) "You have spent $rupees so far this month."
     else "You spent $rupees last month."
 }

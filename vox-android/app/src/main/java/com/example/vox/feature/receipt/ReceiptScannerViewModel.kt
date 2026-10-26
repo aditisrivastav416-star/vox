@@ -20,7 +20,6 @@ data class ReceiptScannerUiState(
 )
 
 sealed interface ReceiptScannerAction {
-    data object Capture : ReceiptScannerAction
     data class ImagePicked(val uri: String) : ReceiptScannerAction
 }
 
@@ -36,10 +35,7 @@ class ReceiptScannerViewModel(private val receiptRepository: ReceiptRepository) 
     val events = _events.receiveAsFlow()
 
     fun onAction(action: ReceiptScannerAction) {
-        when (action) {
-            ReceiptScannerAction.Capture -> scan(null)
-            is ReceiptScannerAction.ImagePicked -> scan(action.uri)
-        }
+        when (action) { is ReceiptScannerAction.ImagePicked -> scan(action.uri) }
     }
 
     private fun scan(uri: String?) {

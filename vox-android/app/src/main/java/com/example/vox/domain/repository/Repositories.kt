@@ -61,6 +61,6 @@ interface BudgetRepository {
 
 interface VoiceAssistant {
     /** Listens for one utterance and interprets it. */
-    suspend fun listen(): VoiceInteraction
-    suspend fun speak(text: String)
+    suspend fun listen(languageCode: String): VoiceInteraction
+    suspend fun speak(text: String, languageCode: String)
 }

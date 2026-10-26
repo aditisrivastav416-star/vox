@@ -18,4 +18,5 @@ data class VoiceResult(
 sealed interface VoiceInteraction {
     data class TransactionCommand(val result: VoiceResult) : VoiceInteraction
     data class SpendingQuestion(val transcript: String) : VoiceInteraction
+    data class SetBudget(val transcript: String, val amountMinor: Long) : VoiceInteraction
 }

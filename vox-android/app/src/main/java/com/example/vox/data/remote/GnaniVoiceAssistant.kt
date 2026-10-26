@@ -19,7 +19,7 @@ import org.json.JSONObject
 import java.io.File
 
 class GnaniVoiceAssistant(private val context: Context, private val api: Api) : VoiceAssistant {
-    override suspend fun listen(): VoiceInteraction {
+    override suspend fun listen(languageCode: String): VoiceInteraction {
         check(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "Microphone permission is required"
         }
@@ -36,17 +36,22 @@ class GnaniVoiceAssistant(private val context: Context, private val api: Api) : 
             recorder.stop()
             val audio = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
             val transcript = api.request("POST", "/voice/transcribe", JSONObject()
-                .put("audioBase64", audio).put("languageCode", "en-IN")).getString("transcript")
-            return if (isSpendingQuestion(transcript)) VoiceInteraction.SpendingQuestion(transcript)
-            else VoiceInteraction.TransactionCommand(parseTransaction(transcript))
+                .put("audioBase64", audio).put("languageCode", languageCode)).getString("transcript")
+            val budget = parseBudgetCommand(transcript)
+            return when {
+                budget != null -> VoiceInteraction.SetBudget(transcript, budget)
+                isSpendingQuestion(transcript) -> VoiceInteraction.SpendingQuestion(transcript)
+                else -> VoiceInteraction.TransactionCommand(parseTransaction(transcript))
+            }
         } finally {
             recorder.release()
             file.delete()
         }
     }
 
-    override suspend fun speak(text: String) {
-        val audio = api.request("POST", "/voice/speak", JSONObject().put("text", text)).getString("audioBase64")
+    override suspend fun speak(text: String, languageCode: String) {
+        val audio = api.request("POST", "/voice/speak", JSONObject().put("text", text)
+            .put("languageCode", languageCode)).getString("audioBase64")
         val file = File.createTempFile("vox-reply", ".mp3", context.cacheDir)
         val player = MediaPlayer()
         try {
@@ -69,8 +74,20 @@ class GnaniVoiceAssistant(private val context: Context, private val api: Api) : 
     }
 }
 
+internal fun parseBudgetCommand(transcript: String): Long? {
+    val lower = transcript.lowercase()
+    if ("budget" !in lower && "बजट" !in lower) return null
+    if (listOf("set", "सेट", "रख", "rak", "कर दी", "kar d", "बना").none { it in lower }) return null
+    val value = Regex("[0-9][0-9,]*(?:\\.[0-9]{1,2})?").find(transcript)?.value?.replace(",", "")?.toDoubleOrNull()
+        ?: error("Could not find the budget amount. Try: set my budget to 4000 rupees")
+    val minor = (value * 100).toLong()
+    require(minor > 0) { "Budget must be positive" }
+    return minor
+}
+
 internal fun isSpendingQuestion(transcript: String): Boolean {
     val lower = transcript.lowercase()
+    if (("कितना" in lower || "कैसा" in lower) && "खर्च" in lower) return true
     return listOf("how much", "what has", "what's", "what is", "tell me", "show me")
         .any { it in lower } && listOf("spend", "spent", "expense", "money").any { it in lower }
 }

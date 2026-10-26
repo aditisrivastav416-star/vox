@@ -14,7 +14,7 @@ class AppContainer(context: Context) {
     val recurringPaymentRepository = LocalRecurringRepository(store)
     val budgetRepository = LocalBudgetRepository(store)
     val userRepository = LocalUserRepository(store)
-    val receiptRepository: ReceiptRepository = UnavailableReceiptRepository()
+    val receiptRepository: ReceiptRepository = LocalReceiptRepository(context, store)
     val voiceAssistant: VoiceAssistant = GnaniVoiceAssistant(context, api)
 
     suspend fun restoreSession(): Boolean = userRepository.hasProfile()

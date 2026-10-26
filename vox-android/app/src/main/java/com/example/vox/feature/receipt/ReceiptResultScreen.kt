@@ -40,16 +40,18 @@ import com.example.vox.domain.model.ReceiptItem
 import java.time.Instant
 
 @Composable
-fun ReceiptResultRoute(viewModel: ReceiptResultViewModel, onBack: () -> Unit, onSaved: () -> Unit, onSplit: (String) -> Unit) {
+fun ReceiptResultRoute(viewModel: ReceiptResultViewModel, onBack: () -> Unit, onSaved: () -> Unit,
+                       onSplit: (String) -> Unit, onEdit: (Receipt) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ObserveEvents(viewModel.events) { if (it == ReceiptResultEvent.Saved) onSaved() }
-    ReceiptResultScreen(state, onBack) { action ->
+    ReceiptResultScreen(state, onBack, onEdit) { action ->
         if (action == ReceiptResultAction.SplitBill) onSplit(viewModel.receiptId) else viewModel.onAction(action)
     }
 }
 
 @Composable
-fun ReceiptResultScreen(state: UiState<Receipt?>, onBack: () -> Unit, onAction: (ReceiptResultAction) -> Unit) {
+fun ReceiptResultScreen(state: UiState<Receipt?>, onBack: () -> Unit, onEdit: (Receipt) -> Unit,
+                        onAction: (ReceiptResultAction) -> Unit) {
     Scaffold(topBar = { VoxTopBar(stringResource(R.string.receipt_found), onBack = onBack) }) { padding ->
         UiStateContent(state, Modifier.padding(padding)) { receipt ->
             if (receipt == null) {
@@ -71,6 +73,9 @@ fun ReceiptResultScreen(state: UiState<Receipt?>, onBack: () -> Unit, onAction: 
                     onClick = { onAction(ReceiptResultAction.AddTransaction) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget).padding(top = VoxSpacing.Medium),
                 ) { Text(stringResource(R.string.add_transaction)) }
+                OutlinedButton(onClick = { onEdit(receipt) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Edit details before adding")
+                }
                 OutlinedButton(
                     onClick = { onAction(ReceiptResultAction.SplitBill) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),
@@ -100,7 +105,7 @@ private fun ReceiptResultPreview() {
                     Money(18_500, "INR"),
                 ),
             ),
-            {}, {},
+            {}, {}, {},
         )
     }
 }

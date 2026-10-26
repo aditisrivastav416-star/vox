@@ -3,6 +3,13 @@ package com.example.vox.feature.receipt
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +58,12 @@ fun ReceiptScannerRoute(viewModel: ReceiptScannerViewModel, onBack: () -> Unit, 
 
 @Composable
 fun ReceiptScannerScreen(state: ReceiptScannerUiState, onAction: (ReceiptScannerAction) -> Unit, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var pendingPhoto by remember { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        if (saved) pendingPhoto?.let { onAction(ReceiptScannerAction.ImagePicked(it.toString())) }
+        pendingPhoto = null
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onAction(ReceiptScannerAction.ImagePicked(uri.toString()))
     }
@@ -92,7 +105,10 @@ fun ReceiptScannerScreen(state: ReceiptScannerUiState, onAction: (ReceiptScanner
         }
         if (state.isScanning) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         ActionCard("Take a photo", "Capture with your camera", VoxIcons.Camera, true, !state.isScanning) {
-            onAction(ReceiptScannerAction.Capture)
+            val directory = File(context.cacheDir, "receipts").apply { mkdirs() }
+            val file = File.createTempFile("receipt-", ".jpg", directory)
+            pendingPhoto = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+            camera.launch(checkNotNull(pendingPhoto))
         }
         ActionCard("Upload from gallery", "Choose an existing photo", VoxIcons.Gallery, false, !state.isScanning) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

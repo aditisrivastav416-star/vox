@@ -5,16 +5,18 @@ class VoiceController {
   @Get('health') health() { return { ok: true }; }
 
   @Post('voice/speak')
-  async speak(@Body() body: { text?: string }) {
+  async speak(@Body() body: { text?: string; languageCode?: string }) {
     const key = process.env.GNANI_API_KEY;
     if (!key) throw new ServiceUnavailableException('GNANI_API_KEY is not configured');
     const spokenText = body?.text?.trim();
     if (!spokenText || spokenText.length > 500) throw new BadRequestException('Text must be 1–500 characters');
+    const language = body.languageCode || 'en-IN';
+    if (!['en-IN', 'hi-IN'].includes(language)) throw new BadRequestException('Unsupported reply language');
     const response = await fetch('https://api.vachana.ai/api/v1/tts/inference', {
       method: 'POST',
       headers: { 'X-API-Key-ID': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: spokenText, voice: 'Nalini', model: 'timbre-v2.5', language: 'en-IN',
+        text: spokenText, voice: 'Nalini', model: 'timbre-v2.5', language,
         audio_config: { container: 'mp3', sample_rate: 24000, num_channels: 1 },
       }),
       signal: AbortSignal.timeout(25_000),

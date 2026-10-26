@@ -2,6 +2,7 @@ package com.example.vox.domain
 
 import com.example.vox.data.remote.parseTransaction
 import com.example.vox.data.remote.isSpendingQuestion
+import com.example.vox.data.remote.parseBudgetCommand
 import com.example.vox.feature.vox.spendingAnswer
 import com.example.vox.domain.model.Category
 import com.example.vox.domain.model.TransactionType
@@ -28,5 +29,11 @@ class VoiceParsingTest {
         val transaction = Transaction("1", TransactionType.EXPENSE, Money(40_000, "INR"), "Groceries",
             Category.GROCERIES, PaymentMethod.UPI, Instant.now(), TransactionSource.MANUAL)
         assertEquals(true, spendingAnswer("What has spending been like this month?", listOf(transaction)).contains("400"))
+    }
+
+    @Test fun understandsEnglishAndHindiBudgetCommands() {
+        assertEquals(400_000L, parseBudgetCommand("Hello Vox, mera iss mahine ka budget 4000 set kar deejiye"))
+        assertEquals(400_000L, parseBudgetCommand("इस महीने का बजट 4000 सेट कर दीजिए"))
+        assertEquals(null, parseBudgetCommand("What is my budget?"))
     }
 }

@@ -1,6 +1,6 @@
 # Vox demo API
 
-The Android app stores profile, transactions, budgets, recurring rules, and groups on the device. This NestJS service forwards short recordings to Gnani Prisma STT and spending answers to Gnani Timbre TTS; the Gnani key never goes into the APK. Generate the key with both Speech to Text and Text to Speech scopes.
+The Android app stores profile, transactions, budgets, recurring rules, groups, and scanned receipt data on the device. Camera/gallery receipts use bundled ML Kit OCR on Android. This NestJS service forwards short recordings to Gnani Prisma STT and spoken answers to Gnani Timbre TTS; the Gnani key never goes into the APK. Generate the key with both Speech to Text and Text to Speech scopes.
 
 ## Run locally
 

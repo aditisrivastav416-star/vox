@@ -9,9 +9,11 @@
 - [x] Answer this/last month spending questions from device data and speak the response with Gnani Timbre TTS.
 - [ ] Expand the voice dialogue beyond monthly spending and one-shot transaction commands; follow-up context is not implemented yet.
 - [ ] Create a Gnani API key with **both Speech to Text and Text to Speech scopes**, then test English, Hindi, and Hinglish recordings and replies. The key is not available in this repository.
-- [ ] Improve language selection and transaction parsing for Hindi and code mixed speech; current parser recognizes numeric amounts and simple English categories only.
+- [x] Add English/Hindi voice language selection and an on-device monthly budget command.
+- [ ] Broaden Hindi and code mixed parsing beyond numeric budget requests; verify real recordings with Gnani Prisma.
 - [ ] Add device backup/export and restore if the demo data needs to survive uninstall or phone loss.
-- [ ] Complete receipt capture/OCR; the current receipt repository is still a placeholder.
+- [x] Add camera/gallery receipt capture and bundled on-device Latin/Devanagari OCR with a review screen.
+- [ ] Test OCR on real receipts; imperfect totals or item lines need manual review before saving.
 - [ ] Verify manual entry, Activity, Home summaries, budgets, recurring, groups, and splits on a physical device.
 - [ ] Check microphone permission denial, no connection, Gnani credit exhaustion, and API errors in the app.
 - [ ] Add abuse controls before distributing the APK or Vercel endpoint publicly. The demo proxy is unauthenticated.
