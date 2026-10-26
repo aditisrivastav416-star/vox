@@ -4,9 +4,9 @@ The Android app stores profile, transactions, budgets, recurring rules, and grou
 
 ## Run locally
 
-Copy `.env.example` to `.env`, replace `GNANI_API_KEY` with a key generated in the [Gnani console](https://app.gnani.ai), then run `npm install` and `npm run start:dev` from this folder. The app's default debug URL is `http://10.0.2.2:3000/api/v1` in the Android emulator.
+Copy `.env.example` to `.env`, replace `GNANI_API_KEY` with a key generated in the [Gnani console](https://app.gnani.ai), then run `npm install` and `npm run start:dev` from this folder. Android defaults to the deployed demo API. For a local backend in the emulator, build with `VOX_API_BASE_URL=http://10.0.2.2:3000/api/v1`.
 
-`GET /api/v1/health` returns `{ "ok": true }`. `POST /api/v1/voice/transcribe` accepts JSON `{ "audioBase64": "...", "languageCode": "en-IN" }` and returns `{ "transcript": "..." }`. Audio is M4A, recorded for five seconds by the app, and forwarded to Gnani's `/stt/v3` endpoint. `POST /api/v1/voice/speak` accepts `{ "text": "..." }` and returns base64 MP3 audio from Timbre. The audio request body is limited to roughly 6 MB of decoded audio. These endpoints have no user authentication and should only be exposed for the limited challenge demo; add abuse controls before sharing a public APK widely.
+`GET /` identifies this API; it does not serve the Android app as a website. `GET /api/v1/health` returns `{ "ok": true }`. `POST /api/v1/voice/transcribe` accepts JSON `{ "audioBase64": "...", "languageCode": "en-IN" }` and returns `{ "transcript": "..." }`. Audio is M4A, recorded for five seconds by the app, and forwarded to Gnani's `/stt/v3` endpoint. `POST /api/v1/voice/speak` accepts `{ "text": "..." }` and returns base64 MP3 audio from Timbre. The audio request body is limited to roughly 6 MB of decoded audio. These endpoints have no user authentication and should only be exposed for the limited challenge demo; add abuse controls before sharing a public APK widely.
 
 ## Vercel
 
