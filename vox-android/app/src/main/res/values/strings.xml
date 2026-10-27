@@ -1,5 +1,20 @@
 <resources>
     <string name="app_name">Vox</string>
+    <string name="widget_title">Vox · Voice transaction</string>
+    <string name="widget_description">Record a transaction by voice from your home screen</string>
+    <string name="widget_tap_to_record">Tap to record</string>
+    <string name="widget_add">Add home screen widget</string>
+    <string name="widget_add_hint">Record a transaction without opening the dashboard</string>
+    <string name="widget_add_manually">Long-press your home screen, choose Widgets, then add Vox · Voice transaction.</string>
+    <string name="widget_record_hint">Say “Spent 400 rupees on groceries”. Review the result, then confirm to save.</string>
+    <string name="widget_setup_title">Set up Vox first</string>
+    <string name="widget_setup_message">Create your device profile in Vox, then tap the widget again to record a transaction.</string>
+    <string name="widget_open_app">Open Vox</string>
+    <string name="widget_permission_title">Allow microphone access</string>
+    <string name="widget_permission_message">Voice recording needs microphone permission. Enable it in Settings → Permissions → Microphone, then tap the mic to try again.</string>
+    <string name="widget_open_settings">Open settings</string>
+    <string name="widget_saved">Transaction saved</string>
+    <string name="widget_saving">Saving…</string>
 
     <!-- Common -->
     <string name="ok">OK</string>

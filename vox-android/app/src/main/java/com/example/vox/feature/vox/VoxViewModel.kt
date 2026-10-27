@@ -30,7 +30,7 @@ import java.util.UUID
 sealed interface VoxUiState {
     data object Idle : VoxUiState
     data object Listening : VoxUiState
-    data class Recognized(val result: VoiceResult) : VoxUiState
+    data class Recognized(val result: VoiceResult, val isSaving: Boolean = false, val error: String? = null) : VoxUiState
     data class Answer(val transcript: String, val reply: String) : VoxUiState
     data class Error(val message: String) : VoxUiState
 }
@@ -57,6 +57,7 @@ class VoxViewModel(
     private val voiceAssistant: VoiceAssistant,
     private val transactionRepository: TransactionRepository,
     private val budgetRepository: BudgetRepository,
+    private val transactionsOnly: Boolean = false,
 ) : ViewModel() {
     private val _state = MutableStateFlow<VoxUiState>(VoxUiState.Idle)
     val state: StateFlow<VoxUiState> = _state.asStateFlow()
@@ -67,16 +68,25 @@ class VoxViewModel(
     val events = _events.receiveAsFlow()
 
     private var listenJob: Job? = null
+    private var transactionId = UUID.randomUUID().toString()
 
     fun onAction(action: VoxAction) {
+        if ((_state.value as? VoxUiState.Recognized)?.isSaving == true) return
         when (action) {
             VoxAction.StartListening -> {
                 listenJob?.cancel()
                 _state.value = VoxUiState.Listening
                 listenJob = viewModelScope.launch {
                     try {
-                        when (val interaction = voiceAssistant.listen(_languageCode.value)) {
-                            is VoiceInteraction.TransactionCommand -> _state.value = VoxUiState.Recognized(interaction.result)
+                        val interaction = voiceAssistant.listen(_languageCode.value)
+                        check(!transactionsOnly || interaction is VoiceInteraction.TransactionCommand) {
+                            "Say a transaction, for example: spent 400 rupees on groceries."
+                        }
+                        when (interaction) {
+                            is VoiceInteraction.TransactionCommand -> {
+                                transactionId = UUID.randomUUID().toString()
+                                _state.value = VoxUiState.Recognized(interaction.result)
+                            }
                             is VoiceInteraction.SpendingQuestion -> {
                                 val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first(), _languageCode.value)
                                 _state.value = VoxUiState.Answer(interaction.transcript, reply)
@@ -108,23 +118,30 @@ class VoxViewModel(
     }
 
     private fun confirm() {
-        val result = (_state.value as? VoxUiState.Recognized)?.result ?: return
+        val recognized = _state.value as? VoxUiState.Recognized ?: return
+        val result = recognized.result
+        _state.value = recognized.copy(isSaving = true, error = null)
         viewModelScope.launch {
             try {
-            transactionRepository.upsert(
-                Transaction(
-                    id = UUID.randomUUID().toString(),
-                    type = result.type,
-                    amount = result.amount,
-                    title = result.title,
-                    category = result.category,
-                    paymentMethod = PaymentMethod.UPI,
-                    timestamp = Instant.now(),
-                    source = TransactionSource.VOICE,
-                ),
-            )
-            _events.send(VoxEvent.Saved)
-            } catch (e: Exception) { _state.value = VoxUiState.Error(e.message ?: "Could not save transaction") }
+                transactionRepository.upsert(
+                    Transaction(
+                        id = transactionId,
+                        type = result.type,
+                        amount = result.amount,
+                        title = result.title,
+                        category = result.category,
+                        paymentMethod = PaymentMethod.UPI,
+                        timestamp = Instant.now(),
+                        source = TransactionSource.VOICE,
+                    ),
+                )
+                _state.value = VoxUiState.Idle
+                _events.send(VoxEvent.Saved)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.value = recognized.copy(error = e.message ?: "Could not save transaction")
+            }
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.example.vox.feature.settings
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +46,7 @@ import com.example.vox.domain.model.UserProfile
 import com.example.vox.feature.auth.currencyLabel
 import com.example.vox.core.designsystem.theme.LocalMoneyFormatter
 import com.example.vox.core.designsystem.theme.LocalDateFormatter
+import com.example.vox.widget.VoiceTransactionWidget
 
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenGroups: () -> Unit, onOpenRecurring: () -> Unit, onSignedOut: () -> Unit) {
@@ -102,6 +106,14 @@ fun SettingsScreen(state: UiState<SettingsUiModel>, onBack: () -> Unit, onAction
                 model.profile?.let { profile ->
                     VoxDropdown("Currency", profile.currencyCode, model.currencies, ::currencyLabel,
                         onSelect = { onAction(SettingsAction.CurrencyChanged(it)) })
+                }
+                SettingsRow(VoxIcons.Mic, stringResource(R.string.widget_add), stringResource(R.string.widget_add_hint)) {
+                    val manager = AppWidgetManager.getInstance(context)
+                    if (!manager.isRequestPinAppWidgetSupported || !manager.requestPinAppWidget(
+                            ComponentName(context, VoiceTransactionWidget::class.java), null, null,
+                        )) {
+                        Toast.makeText(context, R.string.widget_add_manually, Toast.LENGTH_LONG).show()
+                    }
                 }
                 SettingsRow(VoxIcons.Settings, if (VoxAppearance.dark) "Light appearance" else "Dark appearance") {
                     VoxAppearance.toggle(context)

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.media.MediaPlayer
+import android.os.Build
 import android.util.Base64
 import androidx.core.content.ContextCompat
 import com.example.vox.domain.model.Category
@@ -24,7 +25,8 @@ class GnaniVoiceAssistant(private val context: Context, private val api: Api) : 
             "Microphone permission is required"
         }
         val file = File.createTempFile("vox-recording", ".m4a", context.cacheDir)
-        val recorder = MediaRecorder(context)
+        @Suppress("DEPRECATION")
+        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else MediaRecorder()
         try {
             recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)

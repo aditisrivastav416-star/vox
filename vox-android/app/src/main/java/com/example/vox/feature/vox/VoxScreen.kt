@@ -108,7 +108,7 @@ fun VoxRoute(
 }
 
 @Composable
-fun VoxScreen(state: VoxUiState, languageCode: String, onAction: (VoxAction) -> Unit) {
+fun VoxScreen(state: VoxUiState, languageCode: String, quickCapture: Boolean = false, onAction: (VoxAction) -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.62f).background(MaterialTheme.colorScheme.background,
             RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)).safeDrawingPadding().padding(horizontal = 24.dp)) {
@@ -117,7 +117,7 @@ fun VoxScreen(state: VoxUiState, languageCode: String, onAction: (VoxAction) -> 
             }
             androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 VoxBrand(Modifier.weight(1f))
-                IconButton(onClick = { onAction(VoxAction.Close) }) {
+                IconButton(onClick = { onAction(VoxAction.Close) }, enabled = (state as? VoxUiState.Recognized)?.isSaving != true) {
                     Icon(VoxIcons.Close, contentDescription = stringResource(R.string.cd_close))
                 }
             }
@@ -130,9 +130,9 @@ fun VoxScreen(state: VoxUiState, languageCode: String, onAction: (VoxAction) -> 
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (state) {
-                    VoxUiState.Idle -> IdleContent(languageCode, onAction)
+                    VoxUiState.Idle -> IdleContent(languageCode, quickCapture, onAction)
                     VoxUiState.Listening -> ListeningContent(onAction)
-                    is VoxUiState.Recognized -> RecognizedContent(state.result, onAction)
+                    is VoxUiState.Recognized -> RecognizedContent(state, quickCapture, onAction)
                     is VoxUiState.Answer -> {
                         Text(state.transcript, style = MaterialTheme.typography.bodyMedium)
                         Text(state.reply, style = MaterialTheme.typography.headlineSmall,
@@ -142,7 +142,7 @@ fun VoxScreen(state: VoxUiState, languageCode: String, onAction: (VoxAction) -> 
                     is VoxUiState.Error -> {
                         Text(state.message, color = MaterialTheme.colorScheme.error)
                         Button(onClick = { onAction(VoxAction.StartListening) }) { Text("Try recording again") }
-                        androidx.compose.material3.TextButton(onClick = { onAction(VoxAction.TypeInstead()) }) { Text("Type instead") }
+                        if (!quickCapture) androidx.compose.material3.TextButton(onClick = { onAction(VoxAction.TypeInstead()) }) { Text("Type instead") }
                     }
                 }
             }
@@ -152,22 +152,22 @@ fun VoxScreen(state: VoxUiState, languageCode: String, onAction: (VoxAction) -> 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IdleContent(languageCode: String, onAction: (VoxAction) -> Unit) {
+private fun IdleContent(languageCode: String, quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
     var text by remember { mutableStateOf("") }
     Box(Modifier.size(150.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
         MicButton(scale = 1f, onClick = { onAction(VoxAction.StartListening) })
     }
     Text("YOUR MONEY, ON COMMAND", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
     Text("Just say the word.", style = MaterialTheme.typography.headlineMedium)
-    Text("Tap the mic and say ‘Spent ₹400 on groceries’ or ‘What has my spending been like this month?’",
+    Text(if (quickCapture) stringResource(R.string.widget_record_hint) else "Tap the mic and say ‘Spent ₹400 on groceries’ or ‘What has my spending been like this month?’",
         color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 13.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(languageCode == "en-IN", onClick = { onAction(VoxAction.LanguageChanged("en-IN")) }, label = { Text("English") })
         FilterChip(languageCode == "hi-IN", onClick = { onAction(VoxAction.LanguageChanged("hi-IN")) }, label = { Text("हिन्दी / Hinglish") })
     }
-    if (languageCode == "hi-IN") Text("Try: मेरा इस महीने का बजट 4000 सेट कर दीजिए",
+    if (!quickCapture && languageCode == "hi-IN") Text("Try: मेरा इस महीने का बजट 4000 सेट कर दीजिए",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, textAlign = TextAlign.Center)
-    OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
+    if (!quickCapture) OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
         placeholder = { Text("Or type a transaction here...") },
         trailingIcon = { IconButton(onClick = { onAction(VoxAction.TypeInstead(text)) }) { Icon(VoxIcons.Forward, contentDescription = "Continue with typed transaction") } },
         singleLine = true, shape = RoundedCornerShape(14.dp))
@@ -211,7 +211,8 @@ private fun ListeningContent(onAction: (VoxAction) -> Unit) {
 }
 
 @Composable
-private fun RecognizedContent(result: VoiceResult, onAction: (VoxAction) -> Unit) {
+private fun RecognizedContent(state: VoxUiState.Recognized, quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
+    val result = state.result
     Column(
         Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small),
@@ -231,10 +232,12 @@ private fun RecognizedContent(result: VoiceResult, onAction: (VoxAction) -> Unit
     }
     Button(
         onClick = { onAction(VoxAction.Confirm) },
+        enabled = !state.isSaving,
         modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),
-    ) { Text(stringResource(R.string.confirm)) }
-    TextButton(onClick = { onAction(VoxAction.EditDetails(result)) }) { Text(stringResource(R.string.vox_edit_details)) }
-    TextButton(onClick = { onAction(VoxAction.StartListening) }) { Text(stringResource(R.string.vox_try_again)) }
+    ) { Text(stringResource(if (state.isSaving) R.string.widget_saving else R.string.confirm)) }
+    state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+    if (!quickCapture) TextButton(onClick = { onAction(VoxAction.EditDetails(result)) }, enabled = !state.isSaving) { Text(stringResource(R.string.vox_edit_details)) }
+    TextButton(onClick = { onAction(VoxAction.StartListening) }, enabled = !state.isSaving) { Text(stringResource(R.string.vox_try_again)) }
 }
 
 @Preview
