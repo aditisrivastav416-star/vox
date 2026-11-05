@@ -15,6 +15,7 @@ import com.example.vox.domain.model.VoiceResult
 import com.example.vox.domain.model.VoiceInteraction
 import com.example.vox.domain.repository.VoiceAssistant
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.io.File
@@ -37,8 +38,15 @@ class GnaniVoiceAssistant(private val context: Context, private val api: Api) : 
             delay(5_000)
             recorder.stop()
             val audio = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
-            val transcript = api.request("POST", "/voice/transcribe", JSONObject()
-                .put("audioBase64", audio).put("languageCode", languageCode)).getString("transcript")
+            val attempts = listOf("en-IN", "hi-IN").map { code ->
+                try {
+                    code to api.request("POST", "/voice/transcribe", JSONObject()
+                        .put("audioBase64", audio).put("languageCode", code)).getString("transcript")
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) { null }
+            }.filterNotNull()
+            val transcript = attempts.maxByOrNull { (code, text) -> transcriptScore(text, code) }?.second
+                ?: error("No speech detected. Try recording again.")
             val budget = parseBudgetCommand(transcript)
             return when {
                 budget != null -> VoiceInteraction.SetBudget(transcript, budget)
@@ -76,11 +84,20 @@ class GnaniVoiceAssistant(private val context: Context, private val api: Api) : 
     }
 }
 
+internal fun transcriptScore(text: String, languageCode: String): Int {
+    val command = runCatching { parseBudgetCommand(text) != null || isSpendingQuestion(text) }.getOrDefault(false)
+    val transaction = runCatching { parseTransaction(text) }.getOrNull()
+    return (if (command) 6 else 0) + (if (transaction != null) 2 else 0) +
+        (if (transaction?.category != null && transaction.category != Category.OTHER) 4 else 0) +
+        (if ((languageCode == "hi-IN") == text.any { it in '\u0900'..'\u097F' }) 1 else 0)
+}
+
 internal fun parseBudgetCommand(transcript: String): Long? {
     val lower = transcript.lowercase()
     if ("budget" !in lower && "बजट" !in lower) return null
     if (listOf("set", "सेट", "रख", "rak", "कर दी", "kar d", "बना").none { it in lower }) return null
-    val value = Regex("[0-9][0-9,]*(?:\\.[0-9]{1,2})?").find(transcript)?.value?.replace(",", "")?.toDoubleOrNull()
+    val normalized = transcript.map { if (it in '०'..'९') ('0' + (it - '०')) else it }.joinToString("")
+    val value = Regex("[0-9][0-9,]*(?:\\.[0-9]{1,2})?").find(normalized)?.value?.replace(",", "")?.toDoubleOrNull()
         ?: error("Could not find the budget amount. Try: set my budget to 4000 rupees")
     val minor = (value * 100).toLong()
     require(minor > 0) { "Budget must be positive" }
@@ -95,21 +112,29 @@ internal fun isSpendingQuestion(transcript: String): Boolean {
 }
 
 internal fun parseTransaction(transcript: String): VoiceResult {
+    val normalized = transcript.map { if (it in '०'..'९') ('0' + (it - '०')) else it }.joinToString("")
     val amount = Regex("(?:₹|rs\\.?|rupees?\\s*)?([0-9][0-9,]*(?:\\.[0-9]{1,2})?)", RegexOption.IGNORE_CASE)
-        .find(transcript)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
+        .find(normalized)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
         ?: error("Could not find an amount. Try saying: spent 400 rupees on groceries")
     val minor = (amount * 100).toLong()
     require(minor > 0) { "Amount must be positive" }
     val lower = transcript.lowercase()
-    val income = listOf("received", "earned", "salary", "income").any { it in lower }
+    val income = listOf("received", "earned", "salary", "income", "मिला", "मिली", "कमाया", "वेतन", "तनख्वाह", "aaya", "mila", "kamaya").any { it in lower }
     val type = if (income) TransactionType.INCOME else TransactionType.EXPENSE
     val category = when {
+        income && listOf("salary", "वेतन", "तनख्वाह", "tankhwah").any { it in lower } -> Category.SALARY
+        income && listOf("gift", "उपहार", "तोहफा", "tohfa").any { it in lower } -> Category.GIFT
         income -> Category.OTHER_INCOME
-        "grocery" in lower || "groceries" in lower -> Category.GROCERIES
-        "food" in lower || "coffee" in lower || "lunch" in lower -> Category.FOOD
-        "taxi" in lower || "uber" in lower || "bus" in lower -> Category.TRANSPORT
-        "rent" in lower -> Category.RENT
-        "bill" in lower -> Category.BILLS
+        listOf("grocery", "groceries", "किराना", "किराने", "राशन", "kirana", "rashan").any { it in lower } -> Category.GROCERIES
+        listOf("food", "coffee", "lunch", "लंच", "dinner", "breakfast", "restaurant", "खाना", "खाने", "चाय", "नाश्ता", "khana", "chai").any { it in lower } -> Category.FOOD
+        listOf("taxi", "uber", "bus", "auto", "cab", "मेट्रो", "बस", "टैक्सी", "ऑटो", "sawari").any { it in lower } -> Category.TRANSPORT
+        listOf("rent", "किराया", "kiraya").any { it in lower } -> Category.RENT
+        listOf("bill", "बिल", "बिजली", "पानी", "recharge", "रिचार्ज").any { it in lower } -> Category.BILLS
+        listOf("shopping", "clothes", "cloth", "कपड़े", "कपड़ा", "खरीदारी", "kapde", "kapda").any { it in lower } -> Category.SHOPPING
+        listOf("travel", "trip", "flight", "hotel", "यात्रा", "सफ़र", "safar").any { it in lower } -> Category.TRAVEL
+        listOf("movie", "cinema", "entertainment", "फिल्म", "मनोरंजन").any { it in lower } -> Category.ENTERTAINMENT
+        listOf("school", "college", "tuition", "education", "पढ़ाई", "फीस", "padhai").any { it in lower } -> Category.EDUCATION
+        listOf("doctor", "medicine", "hospital", "health", "दवाई", "डॉक्टर", "अस्पताल", "dawai").any { it in lower } -> Category.HEALTH
         else -> Category.OTHER
     }
     return VoiceResult(transcript, type, Money(minor, "INR"), transcript, category)

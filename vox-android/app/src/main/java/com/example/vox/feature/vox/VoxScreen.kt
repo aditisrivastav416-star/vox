@@ -63,9 +63,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.vox.R
 import com.example.vox.core.designsystem.component.LabeledValue
+import com.example.vox.core.designsystem.component.DateField
+import com.example.vox.core.designsystem.component.VoxDatePickerDialog
+import com.example.vox.core.designsystem.component.VoxDropdown
 import com.example.vox.core.designsystem.component.VoxBrand
 import com.example.vox.core.designsystem.icon.VoxIcons
 import com.example.vox.core.designsystem.theme.LocalMoneyFormatter
+import com.example.vox.core.designsystem.theme.LocalDateFormatter
 import com.example.vox.core.designsystem.theme.VoxSize
 import com.example.vox.core.designsystem.theme.VoxSpacing
 import com.example.vox.core.designsystem.theme.VoxTheme
@@ -73,8 +77,10 @@ import com.example.vox.core.ui.ObserveEvents
 import com.example.vox.core.ui.PreviewFixtures
 import com.example.vox.core.ui.labelRes
 import com.example.vox.domain.model.Category
+import com.example.vox.domain.model.PaymentMethod
 import com.example.vox.domain.model.TransactionType
 import com.example.vox.domain.model.VoiceResult
+import java.math.BigDecimal
 
 private const val PULSE_MS = 700
 private const val PULSE_SCALE = 1.15f
@@ -130,7 +136,7 @@ fun VoxScreen(state: VoxUiState, languageCode: String, quickCapture: Boolean = f
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 when (state) {
-                    VoxUiState.Idle -> IdleContent(languageCode, quickCapture, onAction)
+                    VoxUiState.Idle -> IdleContent(quickCapture, onAction)
                     VoxUiState.Listening -> ListeningContent(onAction)
                     is VoxUiState.Recognized -> RecognizedContent(state, quickCapture, onAction)
                     is VoxUiState.Answer -> {
@@ -152,7 +158,7 @@ fun VoxScreen(state: VoxUiState, languageCode: String, quickCapture: Boolean = f
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IdleContent(languageCode: String, quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
+private fun IdleContent(quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
     var text by remember { mutableStateOf("") }
     Box(Modifier.size(150.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) {
         MicButton(scale = 1f, onClick = { onAction(VoxAction.StartListening) })
@@ -161,11 +167,7 @@ private fun IdleContent(languageCode: String, quickCapture: Boolean, onAction: (
     Text("Just say the word.", style = MaterialTheme.typography.headlineMedium)
     Text(if (quickCapture) stringResource(R.string.widget_record_hint) else "Tap the mic and say ‘Spent ₹400 on groceries’ or ‘What has my spending been like this month?’",
         color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 13.sp)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(languageCode == "en-IN", onClick = { onAction(VoxAction.LanguageChanged("en-IN")) }, label = { Text("English") })
-        FilterChip(languageCode == "hi-IN", onClick = { onAction(VoxAction.LanguageChanged("hi-IN")) }, label = { Text("हिन्दी / Hinglish") })
-    }
-    if (!quickCapture && languageCode == "hi-IN") Text("Try: मेरा इस महीने का बजट 4000 सेट कर दीजिए",
+    Text("Speak in English or Hindi. Vox detects the language automatically.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, textAlign = TextAlign.Center)
     if (!quickCapture) OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth().padding(top = 8.dp),
         placeholder = { Text("Or type a transaction here...") },
@@ -210,9 +212,13 @@ private fun ListeningContent(onAction: (VoxAction) -> Unit) {
     OutlinedButton(onClick = { onAction(VoxAction.CancelListening) }) { Text(stringResource(R.string.cancel)) }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RecognizedContent(state: VoxUiState.Recognized, quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
     val result = state.result
+    var showDatePicker by remember { mutableStateOf(false) }
+    var amountText by remember(result.transcript) { mutableStateOf(BigDecimal.valueOf(result.amount.amountMinor, 2).toPlainString()) }
+    val amountMinor = runCatching { BigDecimal(amountText).movePointRight(2).longValueExact() }.getOrNull()?.takeIf { it > 0 }
     Column(
         Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         verticalArrangement = Arrangement.spacedBy(VoxSpacing.Small),
@@ -225,19 +231,45 @@ private fun RecognizedContent(state: VoxUiState.Recognized, quickCapture: Boolea
         )
         HorizontalDivider(Modifier.padding(vertical = VoxSpacing.Small))
         Text(stringResource(R.string.vox_found), style = MaterialTheme.typography.labelLarge)
-        LabeledValue(stringResource(R.string.field_type), stringResource(result.type.labelRes))
-        LabeledValue(stringResource(R.string.field_amount), LocalMoneyFormatter.current.format(result.amount))
-        LabeledValue(stringResource(R.string.field_category), stringResource(result.category.labelRes))
-        LabeledValue(stringResource(R.string.field_date), stringResource(R.string.date_today))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TransactionType.entries.forEach { type ->
+                FilterChip(result.type == type, onClick = { onAction(VoxAction.UpdateResult(type = type)) },
+                    label = { Text(stringResource(type.labelRes)) })
+            }
+        }
+        OutlinedTextField(amountText, { amountText = it; runCatching { BigDecimal(it).movePointRight(2).longValueExact() }
+            .getOrNull()?.takeIf { value -> value > 0 }?.let { value -> onAction(VoxAction.UpdateResult(amount = value)) } },
+            label = { Text(stringResource(R.string.field_amount)) }, isError = amountMinor == null,
+            singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(result.title, { onAction(VoxAction.UpdateResult(title = it)) },
+            label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Text(stringResource(R.string.field_category), style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Category.forType(result.type).forEach { category ->
+                FilterChip(result.category == category, onClick = { onAction(VoxAction.UpdateResult(category = category)) },
+                    label = { Text(stringResource(category.labelRes)) })
+            }
+        }
+        DateField(label = stringResource(R.string.field_date), value = LocalDateFormatter.current.relativeDate(state.date),
+            onPick = { showDatePicker = true })
+        VoxDropdown(
+            label = stringResource(R.string.field_payment_method), selected = state.paymentMethod,
+            options = PaymentMethod.entries, optionLabel = { stringResource(it.labelRes) },
+            onSelect = { onAction(VoxAction.UpdateResult(paymentMethod = it)) },
+        )
+        OutlinedTextField(state.notes, { onAction(VoxAction.UpdateResult(notes = it)) },
+            label = { Text(stringResource(R.string.field_notes)) }, modifier = Modifier.fillMaxWidth())
     }
     Button(
         onClick = { onAction(VoxAction.Confirm) },
-        enabled = !state.isSaving,
+        enabled = !state.isSaving && amountMinor != null && result.title.isNotBlank(),
         modifier = Modifier.fillMaxWidth().heightIn(min = VoxSize.MinTouchTarget),
     ) { Text(stringResource(if (state.isSaving) R.string.widget_saving else R.string.confirm)) }
     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-    if (!quickCapture) TextButton(onClick = { onAction(VoxAction.EditDetails(result)) }, enabled = !state.isSaving) { Text(stringResource(R.string.vox_edit_details)) }
     TextButton(onClick = { onAction(VoxAction.StartListening) }, enabled = !state.isSaving) { Text(stringResource(R.string.vox_try_again)) }
+    if (showDatePicker) VoxDatePickerDialog(state.date,
+        onConfirm = { onAction(VoxAction.UpdateResult(date = it)); showDatePicker = false },
+        onDismiss = { showDatePicker = false })
 }
 
 @Preview

@@ -8,6 +8,8 @@ import com.example.vox.domain.model.TransactionSource
 import com.example.vox.domain.model.VoiceResult
 import com.example.vox.domain.model.VoiceInteraction
 import com.example.vox.domain.model.TransactionType
+import com.example.vox.domain.model.Category
+import com.example.vox.domain.model.Money
 import com.example.vox.domain.repository.TransactionRepository
 import com.example.vox.domain.repository.VoiceAssistant
 import com.example.vox.domain.repository.BudgetRepository
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.text.NumberFormat
@@ -30,7 +34,8 @@ import java.util.UUID
 sealed interface VoxUiState {
     data object Idle : VoxUiState
     data object Listening : VoxUiState
-    data class Recognized(val result: VoiceResult, val isSaving: Boolean = false, val error: String? = null) : VoxUiState
+    data class Recognized(val result: VoiceResult, val isSaving: Boolean = false, val error: String? = null,
+        val paymentMethod: PaymentMethod = PaymentMethod.UPI, val date: LocalDate = LocalDate.now(), val notes: String = "") : VoxUiState
     data class Answer(val transcript: String, val reply: String) : VoxUiState
     data class Error(val message: String) : VoxUiState
 }
@@ -39,7 +44,9 @@ sealed interface VoxAction {
     data object StartListening : VoxAction
     data object CancelListening : VoxAction
     data object Confirm : VoxAction
-    data class LanguageChanged(val code: String) : VoxAction
+    data class UpdateResult(val amount: Long? = null, val title: String? = null, val category: Category? = null,
+        val type: TransactionType? = null, val paymentMethod: PaymentMethod? = null, val date: LocalDate? = null,
+        val notes: String? = null) : VoxAction
 
     // Navigation
     data object Close : VoxAction
@@ -73,12 +80,31 @@ class VoxViewModel(
     fun onAction(action: VoxAction) {
         if ((_state.value as? VoxUiState.Recognized)?.isSaving == true) return
         when (action) {
+            is VoxAction.UpdateResult -> {
+                val recognized = _state.value as? VoxUiState.Recognized ?: return
+                val result = recognized.result
+                val type = action.type ?: result.type
+                _state.value = recognized.copy(result = result.copy(
+                    amount = action.amount?.let { Money(it, result.amount.currencyCode) } ?: result.amount,
+                    title = action.title ?: result.title,
+                    category = action.category?.takeIf { it.type == type }
+                        ?: result.category.takeIf { it.type == type } ?: Category.forType(type).first(),
+                    type = type,
+                ), paymentMethod = action.paymentMethod ?: recognized.paymentMethod,
+                    date = action.date ?: recognized.date, notes = action.notes ?: recognized.notes, error = null)
+            }
             VoxAction.StartListening -> {
                 listenJob?.cancel()
                 _state.value = VoxUiState.Listening
                 listenJob = viewModelScope.launch {
                     try {
                         val interaction = voiceAssistant.listen(_languageCode.value)
+                        val spokenText = when (interaction) {
+                            is VoiceInteraction.TransactionCommand -> interaction.result.transcript
+                            is VoiceInteraction.SpendingQuestion -> interaction.transcript
+                            is VoiceInteraction.SetBudget -> interaction.transcript
+                        }
+                        _languageCode.value = if (spokenText.any { it in '\u0900'..'\u097F' }) "hi-IN" else "en-IN"
                         check(!transactionsOnly || interaction is VoiceInteraction.TransactionCommand) {
                             "Say a transaction, for example: spent 400 rupees on groceries."
                         }
@@ -111,7 +137,6 @@ class VoxViewModel(
                 _state.value = VoxUiState.Idle
             }
             VoxAction.Confirm -> confirm()
-            is VoxAction.LanguageChanged -> if (action.code in listOf("en-IN", "hi-IN")) _languageCode.value = action.code
             VoxAction.Close, is VoxAction.TypeInstead, VoxAction.ScanReceipt, VoxAction.SplitBill,
             is VoxAction.EditDetails -> Unit // navigation
         }
@@ -130,9 +155,10 @@ class VoxViewModel(
                         amount = result.amount,
                         title = result.title,
                         category = result.category,
-                        paymentMethod = PaymentMethod.UPI,
-                        timestamp = Instant.now(),
+                        paymentMethod = recognized.paymentMethod,
+                        timestamp = recognized.date.atTime(LocalTime.now()).atZone(ZoneId.systemDefault()).toInstant(),
                         source = TransactionSource.VOICE,
+                        notes = recognized.notes.trim().ifBlank { null },
                     ),
                 )
                 _state.value = VoxUiState.Idle

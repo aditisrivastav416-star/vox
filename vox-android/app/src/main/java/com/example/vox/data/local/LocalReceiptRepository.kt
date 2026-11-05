@@ -20,6 +20,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 class LocalReceiptRepository(private val context: Context, private val store: DeviceStore) : ReceiptRepository {
@@ -32,9 +34,10 @@ class LocalReceiptRepository(private val context: Context, private val store: De
         val latin = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val devanagari = TextRecognition.getClient(DevanagariTextRecognizerOptions.Builder().build())
         try {
-            val lines = listOf(latin, devanagari).flatMap { recognizer ->
-                Tasks.await(recognizer.process(image)).textBlocks.flatMap { block -> block.lines.map { it.text } }
-            }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            val latinLines = Tasks.await(latin.process(image)).textBlocks.flatMap { block -> block.lines.map { it.text } }
+            val devanagariLines = Tasks.await(devanagari.process(image)).textBlocks.flatMap { block -> block.lines.map { it.text } }
+            val lines = (if (latinLines.any { amountMinor(it) != null }) latinLines else devanagariLines)
+                .map { it.trim() }.filter { it.isNotEmpty() }
             val receipt = parseReceiptLines(lines)
             rows.value = rows.value + receipt
             store.save("receipts", rows.value.map { it.toJson() })
@@ -51,29 +54,44 @@ private fun amountMinor(line: String): Long? {
     val raw = amountAtEnd.find(line)?.groupValues?.get(1)?.replace(",", "") ?: return null
     return runCatching { BigDecimal(raw).movePointRight(2).longValueExact() }.getOrNull()?.takeIf { it > 0 }
 }
+private val receiptDate = Regex("""\b(?:date\s*[:\-]?\s*)?(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b""", RegexOption.IGNORE_CASE)
 
 internal fun parseReceiptLines(lines: List<String>): Receipt {
-    val clean = lines.map { it.trim() }.filter { it.isNotEmpty() }
-    require(clean.isNotEmpty()) { "No text found in receipt" }
-    val totalLine = clean.lastOrNull {
-        Regex("""\b(grand total|net total|amount due|total)\b|कुल|योग""", RegexOption.IGNORE_CASE).containsMatchIn(it) &&
-            !Regex("""subtotal|sub total""", RegexOption.IGNORE_CASE).containsMatchIn(it) && amountMinor(it) != null
+    val clean = lines.map { it.trim() }.filter { it.isNotEmpty() }.flatMap { line ->
+        line.split(Regex("\\s{3,}")).filter { it.isNotBlank() }
     }
-    val total = totalLine?.let(::amountMinor) ?: clean.asReversed().firstNotNullOfOrNull(::amountMinor)
+    require(clean.isNotEmpty()) { "No text found in receipt" }
+    val totalCandidates = clean.indices.filter { index ->
+        val line = clean[index]
+        Regex("""\b(grand total|net total|amount due|total)\b|कुल|योग""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
+            !Regex("""subtotal|sub total|total items?""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
+            (amountMinor(line) != null || clean.getOrNull(index + 1)?.let(::amountMinor) != null)
+    }
+    val totalIndex = totalCandidates.lastOrNull { clean[it].contains(Regex("""\bgrand total\b""", RegexOption.IGNORE_CASE)) }
+        ?: totalCandidates.lastOrNull()
+    val total = totalIndex?.let { amountMinor(clean[it]) ?: clean.getOrNull(it + 1)?.let(::amountMinor) }
+        ?: clean.asReversed().firstNotNullOfOrNull(::amountMinor)
         ?: error("Could not find a receipt total")
-    val tax = clean.lastOrNull { Regex("""\b(tax|gst|cgst|sgst)\b|कर""", RegexOption.IGNORE_CASE).containsMatchIn(it) }
-        ?.let(::amountMinor) ?: 0L
-    val items = clean.mapNotNull { line ->
-        if (line == totalLine || Regex("""\b(total|subtotal|tax|gst|invoice|bill no|date|change|cash|card)\b|कुल|योग|कर""", RegexOption.IGNORE_CASE).containsMatchIn(line)) return@mapNotNull null
-        val amount = amountMinor(line) ?: return@mapNotNull null
+    val taxIndices = clean.indices.filter { Regex("""\b(tax|gst|cgst|sgst)\b|कर""", RegexOption.IGNORE_CASE).containsMatchIn(clean[it]) }
+    val tax = taxIndices.sumOf { amountMinor(clean[it]) ?: clean.getOrNull(it + 1)?.let(::amountMinor) ?: 0L }
+    val items = clean.mapIndexedNotNull { index, line ->
+        if (index == totalIndex || index in taxIndices || index == totalIndex?.plus(1) || taxIndices.any { index == it + 1 } ||
+            Regex("""\b(total|subtotal|tax|gst|invoice|bill no|date|change|cash|card)\b|कुल|योग|कर""", RegexOption.IGNORE_CASE).containsMatchIn(line)) return@mapIndexedNotNull null
+        val amount = amountMinor(line) ?: clean.getOrNull(index + 1)?.takeIf { it.matches(amountAtEnd) }?.let(::amountMinor) ?: return@mapIndexedNotNull null
         val name = line.replace(amountAtEnd, "").trim(' ', ':', '-', '₹')
         if (name.isBlank() || amount > total) null else ReceiptItem(UUID.randomUUID().toString(), name, Money(amount, "INR"))
     }
     val recognizedSum = items.sumOf { it.amount.amountMinor }
-    val finalItems = if (items.isNotEmpty() && recognizedSum + tax == total) items
-        else listOf(ReceiptItem(UUID.randomUUID().toString(), "Receipt total", Money(total, "INR")))
-    val finalTax = if (finalItems === items) tax else 0L
-    return Receipt(UUID.randomUUID().toString(), clean.first(), Instant.now(), finalItems, Money(finalTax, "INR"))
+    val finalTax = tax.takeIf { it < total } ?: 0L
+    val finalItems = if (items.isNotEmpty() && recognizedSum + finalTax == total) items else
+        listOf(ReceiptItem(UUID.randomUUID().toString(), "Receipt total", Money(total - finalTax, "INR")))
+    val date = clean.firstNotNullOfOrNull { line ->
+        receiptDate.find(line)?.destructured?.let { (day, month, year) ->
+            runCatching { LocalDate.of(year.toInt(), month.toInt(), day.toInt()) }.getOrNull()
+        }
+    }
+    val timestamp = date?.atStartOfDay(ZoneId.systemDefault())?.toInstant() ?: Instant.now()
+    return Receipt(UUID.randomUUID().toString(), clean.first(), timestamp, finalItems, Money(finalTax, "INR"))
 }
 
 private fun Receipt.toJson() = JSONObject().apply {
