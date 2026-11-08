@@ -49,7 +49,7 @@ class LocalReceiptRepository(private val context: Context, private val store: De
     }
 }
 
-private val amountAtEnd = Regex("""(?:₹\s*|Rs\.?\s*)?([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*$""", RegexOption.IGNORE_CASE)
+private val amountAtEnd = Regex("""(?:₹\s*|Rs\.?\s*)?([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:/-)?\s*$""", RegexOption.IGNORE_CASE)
 private fun amountMinor(line: String): Long? {
     val raw = amountAtEnd.find(line)?.groupValues?.get(1)?.replace(",", "") ?: return null
     return runCatching { BigDecimal(raw).movePointRight(2).longValueExact() }.getOrNull()?.takeIf { it > 0 }
@@ -63,15 +63,18 @@ internal fun parseReceiptLines(lines: List<String>): Receipt {
     require(clean.isNotEmpty()) { "No text found in receipt" }
     val totalCandidates = clean.indices.filter { index ->
         val line = clean[index]
-        Regex("""\b(grand total|net total|amount due|total)\b|कुल|योग""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
-            !Regex("""subtotal|sub total|total items?""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
+        Regex("""\b(grand\s*total|net\s*(?:total|amount)|gross\s*total|amount\s*(?:due|payable)|bill\s*(?:total|amount)|total)\b|कुल|योग""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
+            !Regex("""subtotal|sub total|\bit[e]?[mn]s?\b|\bqty\b|\bquantity\b|savings?""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
             (amountMinor(line) != null || clean.getOrNull(index + 1)?.let(::amountMinor) != null)
     }
-    val totalIndex = totalCandidates.lastOrNull { clean[it].contains(Regex("""\bgrand total\b""", RegexOption.IGNORE_CASE)) }
+    val totalIndex = totalCandidates.lastOrNull { clean[it].contains(Regex("""\bgrand\s*total\b""", RegexOption.IGNORE_CASE)) }
         ?: totalCandidates.lastOrNull()
     val total = totalIndex?.let { amountMinor(clean[it]) ?: clean.getOrNull(it + 1)?.let(::amountMinor) }
-        ?: clean.asReversed().firstNotNullOfOrNull(::amountMinor)
         ?: error("Could not find a receipt total")
+    require(clean.withIndex().none { (index, line) -> index != totalIndex &&
+        !Regex("""\b(items?|qty|quantity|savings?|saved|mrp|date|time|phone|invoice|bill no)\b""", RegexOption.IGNORE_CASE).containsMatchIn(line) &&
+        (amountMinor(line) ?: 0L) > total && Regex("""[A-Za-z₹]""").containsMatchIn(line)
+    }) { "Receipt total conflicts with another amount. Please rescan or enter the total manually." }
     val taxIndices = clean.indices.filter { Regex("""\b(tax|gst|cgst|sgst)\b|कर""", RegexOption.IGNORE_CASE).containsMatchIn(clean[it]) }
     val tax = taxIndices.sumOf { amountMinor(clean[it]) ?: clean.getOrNull(it + 1)?.let(::amountMinor) ?: 0L }
     val items = clean.mapIndexedNotNull { index, line ->

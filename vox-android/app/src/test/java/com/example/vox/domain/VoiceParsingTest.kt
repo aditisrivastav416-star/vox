@@ -30,6 +30,11 @@ class VoiceParsingTest {
         val transaction = Transaction("1", TransactionType.EXPENSE, Money(40_000, "INR"), "Groceries",
             Category.GROCERIES, PaymentMethod.UPI, Instant.now(), TransactionSource.MANUAL)
         assertEquals(true, spendingAnswer("What has spending been like this month?", listOf(transaction)).contains("400"))
+        assertEquals(true, isSpendingQuestion("How is my budget doing?"))
+        assertEquals(true, isSpendingQuestion("What are my spending habits?"))
+        assertEquals(true, spendingAnswer("How is my budget doing?", listOf(transaction), budgetMinor = 50_000).contains("100"))
+        assertEquals(true, spendingAnswer("What are my spending habits?", listOf(transaction)).contains("groceries"))
+        assertEquals(true, spendingAnswer("How much did I spend on groceries?", listOf(transaction)).contains("400"))
     }
 
     @Test fun understandsEnglishAndHindiBudgetCommands() {

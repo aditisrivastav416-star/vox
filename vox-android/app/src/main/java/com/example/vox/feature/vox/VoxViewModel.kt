@@ -114,7 +114,8 @@ class VoxViewModel(
                                 _state.value = VoxUiState.Recognized(interaction.result)
                             }
                             is VoiceInteraction.SpendingQuestion -> {
-                                val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first(), _languageCode.value)
+                                val reply = spendingAnswer(interaction.transcript, transactionRepository.observeTransactions().first(),
+                                    _languageCode.value, budgetRepository.observeBudgets().first()[YearMonth.now().toString() to "INR"])
                                 _state.value = VoxUiState.Answer(interaction.transcript, reply)
                                 voiceAssistant.speak(reply, _languageCode.value)
                             }
@@ -172,13 +173,42 @@ class VoxViewModel(
     }
 }
 
-internal fun spendingAnswer(question: String, transactions: List<Transaction>, languageCode: String = "en-IN"): String {
+internal fun spendingAnswer(question: String, transactions: List<Transaction>, languageCode: String = "en-IN", budgetMinor: Long? = null): String {
     val month = if ("last month" in question.lowercase()) YearMonth.now().minusMonths(1) else YearMonth.now()
-    val spent = transactions.filter {
+    val expenses = transactions.filter {
         it.type == TransactionType.EXPENSE && it.amount.currencyCode == "INR" &&
             YearMonth.from(it.timestamp.atZone(ZoneId.systemDefault())) == month
-    }.sumOf { it.amount.amountMinor }
-    val rupees = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN")).format(spent / 100.0)
+    }
+    val spent = expenses.sumOf { it.amount.amountMinor }
+    val money = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN"))
+    val rupees = money.format(spent / 100.0)
+    val lower = question.lowercase()
+    if (month == YearMonth.now() && listOf("budget", "afford", "बजट").any { it in lower }) {
+        if (budgetMinor == null) return if (languageCode == "hi-IN") "इस महीने का बजट अभी सेट नहीं है।" else "You haven't set a budget for this month yet."
+        val remaining = budgetMinor - spent
+        val balance = money.format(kotlin.math.abs(remaining) / 100.0)
+        return if (languageCode == "hi-IN") "इस महीने $rupees खर्च हुए हैं। बजट ${money.format(budgetMinor / 100.0)} है। ${if (remaining >= 0) "$balance बाकी हैं।" else "$balance बजट से ज़्यादा खर्च हुए हैं।"}"
+        else "You've spent $rupees of your ${money.format(budgetMinor / 100.0)} budget this month. ${if (remaining >= 0) "$balance remains." else "You're $balance over budget."}"
+    }
+    val category = Category.entries.filter { it.type == TransactionType.EXPENSE }.firstOrNull {
+        val words = when (it) {
+            Category.GROCERIES -> listOf("grocer", "किरान", "राशन")
+            Category.FOOD -> listOf("food", "restaurant", "खान")
+            Category.TRANSPORT -> listOf("transport", "taxi", "uber", "बस")
+            else -> listOf(it.name.lowercase())
+        }
+        words.any { word -> word in lower }
+    }
+    if (category != null) {
+        val categoryTotal = expenses.filter { it.category == category }.sumOf { it.amount.amountMinor }
+        return if (languageCode == "hi-IN") "${category.name.lowercase()} पर ${money.format(categoryTotal / 100.0)} खर्च हुए हैं।"
+        else "You spent ${money.format(categoryTotal / 100.0)} on ${category.name.lowercase()} ${if (month == YearMonth.now()) "this month" else "last month"}."
+    }
+    if (listOf("habit", "pattern", "most", "biggest", "कैसा").any { it in lower }) {
+        val top = expenses.groupBy { it.category ?: Category.OTHER }.maxByOrNull { (_, rows) -> rows.sumOf { it.amount.amountMinor } }
+        if (top != null) return if (languageCode == "hi-IN") "इस महीने $rupees खर्च हुए हैं। सबसे ज़्यादा ${top.key.name.lowercase()} पर ${money.format(top.value.sumOf { it.amount.amountMinor } / 100.0)} खर्च हुए।"
+        else "You spent $rupees ${if (month == YearMonth.now()) "this month" else "last month"}. Your largest category was ${top.key.name.lowercase()} at ${money.format(top.value.sumOf { it.amount.amountMinor } / 100.0)}."
+    }
     return if (languageCode == "hi-IN") {
         if (month == YearMonth.now()) "इस महीने आपने $rupees खर्च किए हैं।" else "पिछले महीने आपने $rupees खर्च किए थे।"
     } else if (month == YearMonth.now()) "You have spent $rupees so far this month."

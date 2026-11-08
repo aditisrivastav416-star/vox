@@ -106,9 +106,9 @@ internal fun parseBudgetCommand(transcript: String): Long? {
 
 internal fun isSpendingQuestion(transcript: String): Boolean {
     val lower = transcript.lowercase()
-    if (("कितना" in lower || "कैसा" in lower) && "खर्च" in lower) return true
-    return listOf("how much", "what has", "what's", "what is", "tell me", "show me")
-        .any { it in lower } && listOf("spend", "spent", "expense", "money").any { it in lower }
+    return listOf("spend", "spent", "expense", "budget", "saving", "afford", "money", "खर्च", "बजट", "बचत")
+        .any { it in lower } && (lower.contains('?') || listOf("how", "what", "where", "why", "tell", "show", "am i", "can i", "कितना", "कैसा", "बताओ", "क्या")
+            .any { it in lower })
 }
 
 internal fun parseTransaction(transcript: String): VoiceResult {

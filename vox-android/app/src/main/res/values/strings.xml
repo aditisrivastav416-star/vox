@@ -189,7 +189,7 @@
     <string name="receipt_split">Split this bill</string>
     <string name="receipt_missing_title">Receipt unavailable</string>
     <string name="receipt_missing_body">Please scan it again.</string>
-    <string name="error_scan_failed">Couldn\'t read the receipt. Try again.</string>
+    <string name="error_scan_failed">Couldn\'t verify the bill total. Try a clearer photo or enter the expense manually.</string>
 
     <!-- Split -->
     <string name="split_bill">Split bill</string>

@@ -165,7 +165,7 @@ private fun IdleContent(quickCapture: Boolean, onAction: (VoxAction) -> Unit) {
     }
     Text("YOUR MONEY, ON COMMAND", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, letterSpacing = 1.5.sp)
     Text("Just say the word.", style = MaterialTheme.typography.headlineMedium)
-    Text(if (quickCapture) stringResource(R.string.widget_record_hint) else "Tap the mic and say ‘Spent ₹400 on groceries’ or ‘What has my spending been like this month?’",
+    Text(if (quickCapture) stringResource(R.string.widget_record_hint) else "Tap the mic to log a purchase, ask about spending habits, or check your budget.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, fontSize = 13.sp)
     Text("Speak in English or Hindi. Vox detects the language automatically.",
         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, textAlign = TextAlign.Center)

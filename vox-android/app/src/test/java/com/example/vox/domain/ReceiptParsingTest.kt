@@ -2,6 +2,7 @@ package com.example.vox.domain
 
 import com.example.vox.data.local.parseReceiptLines
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -45,5 +46,19 @@ class ReceiptParsingTest {
             "D Mart", "DATE: 25/10/2023", "TOTAL ITEMS: 8", "GRAND TOTAL:", "₹ 1973.00",
         ))
         assertEquals(197_300L, receipt.total.amountMinor)
+    }
+
+    @Test fun neverTreatsDmartItemCountAsBillTotal() {
+        assertThrows(IllegalStateException::class.java) {
+            parseReceiptLines(listOf("D Mart", "TOTAL ITEMS: 8/-", "THANK YOU"))
+        }
+        assertThrows(IllegalStateException::class.java) {
+            parseReceiptLines(listOf("D2Mart", "TOTAL ITENS: 8", "GROSS TOTAL:", "GRAND TOTAL", "SAVINGS: You Saved"))
+        }
+        val receipt = parseReceiptLines(listOf("D Mart", "TOTAL ITEMS: 8/-", "NET AMOUNT: 1972.90", "GRAND TOTAL: 1973/-"))
+        assertEquals(197_300L, receipt.total.amountMinor)
+        assertThrows(IllegalArgumentException::class.java) {
+            parseReceiptLines(listOf("D Mart", "GROCERIES 1973.00", "TOTAL 8/-"))
+        }
     }
 }
