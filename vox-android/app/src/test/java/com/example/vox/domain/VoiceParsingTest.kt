@@ -35,6 +35,11 @@ class VoiceParsingTest {
         assertEquals(true, spendingAnswer("How is my budget doing?", listOf(transaction), budgetMinor = 50_000).contains("100"))
         assertEquals(true, spendingAnswer("What are my spending habits?", listOf(transaction)).contains("groceries"))
         assertEquals(true, spendingAnswer("How much did I spend on groceries?", listOf(transaction)).contains("400"))
+        assertEquals(true, isSpendingQuestion("Can you summarize my spending"))
+        assertEquals(true, isSpendingQuestion("Summarise my expenses"))
+        assertEquals(false, isSpendingQuestion("Spent 400 on groceries"))
+        val summary = spendingAnswer("Can you summarize my spending", listOf(transaction))
+        assertEquals(true, summary.contains("400") && summary.contains("groceries"))
     }
 
     @Test fun understandsEnglishAndHindiBudgetCommands() {

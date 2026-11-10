@@ -107,7 +107,7 @@ internal fun parseBudgetCommand(transcript: String): Long? {
 internal fun isSpendingQuestion(transcript: String): Boolean {
     val lower = transcript.lowercase()
     return listOf("spend", "spent", "expense", "budget", "saving", "afford", "money", "खर्च", "बजट", "बचत")
-        .any { it in lower } && (lower.contains('?') || listOf("how", "what", "where", "why", "tell", "show", "am i", "can i", "कितना", "कैसा", "बताओ", "क्या")
+        .any { it in lower } && (lower.contains('?') || listOf("how", "what", "where", "why", "tell", "show", "am i", "can i", "summari", "summariz", "summary", "कितना", "कैसा", "बताओ", "क्या", "सारांश")
             .any { it in lower })
 }
 

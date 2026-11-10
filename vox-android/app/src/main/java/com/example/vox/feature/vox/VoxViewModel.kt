@@ -204,9 +204,9 @@ internal fun spendingAnswer(question: String, transactions: List<Transaction>, l
         return if (languageCode == "hi-IN") "${category.name.lowercase()} पर ${money.format(categoryTotal / 100.0)} खर्च हुए हैं।"
         else "You spent ${money.format(categoryTotal / 100.0)} on ${category.name.lowercase()} ${if (month == YearMonth.now()) "this month" else "last month"}."
     }
-    if (listOf("habit", "pattern", "most", "biggest", "कैसा").any { it in lower }) {
+    if (listOf("habit", "pattern", "most", "biggest", "कैसा", "summari", "summariz", "summary", "सारांश").any { it in lower }) {
         val top = expenses.groupBy { it.category ?: Category.OTHER }.maxByOrNull { (_, rows) -> rows.sumOf { it.amount.amountMinor } }
-        if (top != null) return if (languageCode == "hi-IN") "इस महीने $rupees खर्च हुए हैं। सबसे ज़्यादा ${top.key.name.lowercase()} पर ${money.format(top.value.sumOf { it.amount.amountMinor } / 100.0)} खर्च हुए।"
+        if (top != null) return if (languageCode == "hi-IN") "${if (month == YearMonth.now()) "इस महीने" else "पिछले महीने"} $rupees खर्च हुए हैं। सबसे ज़्यादा ${top.key.name.lowercase()} पर ${money.format(top.value.sumOf { it.amount.amountMinor } / 100.0)} खर्च हुए।"
         else "You spent $rupees ${if (month == YearMonth.now()) "this month" else "last month"}. Your largest category was ${top.key.name.lowercase()} at ${money.format(top.value.sumOf { it.amount.amountMinor } / 100.0)}."
     }
     return if (languageCode == "hi-IN") {
